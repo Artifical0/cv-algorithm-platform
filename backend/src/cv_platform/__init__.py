@@ -1,0 +1,2 @@
+"""CV Algorithm Platform backend."""
+

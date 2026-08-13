@@ -1,0 +1,2 @@
+"""Algorithm HTTP adapters."""
+

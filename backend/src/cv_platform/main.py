@@ -1,0 +1,208 @@
+import asyncio
+from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from .api.router import api_router
+from .core.config import get_settings
+from .core.errors import install_exception_handlers
+from .core.seed import seed_demo_data
+from .dependencies import get_container
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        container = get_container()
+        seed_demo_data(container)
+        async def reconcile_autoscaling() -> None:
+            while True:
+                await asyncio.to_thread(container.operations.reconcile)
+                await asyncio.sleep(settings.autoscaling_reconcile_seconds)
+
+        scaling_task = asyncio.create_task(reconcile_autoscaling())
+        try:
+            yield
+        finally:
+            scaling_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await scaling_task
+            container.task_queue.shutdown()
+            container.build_queue.shutdown()
+            container.workflows.shutdown()
+            container.media_runs.shutdown()
+
+    app = FastAPI(
+        title=settings.app_name,
+        version="0.1.0",
+        docs_url="/docs" if settings.debug else None,
+        redoc_url=None,
+        lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    install_exception_handlers(app)
+    public_paths = {"/health", f"{settings.api_prefix}/auth/login"}
+    rate_limited_paths = {
+        f"{settings.api_prefix}/assets/upload",
+        f"{settings.api_prefix}/algorithms/import",
+        f"{settings.api_prefix}/tasks",
+        f"{settings.api_prefix}/comparisons",
+        f"{settings.api_prefix}/auth/login",
+    }
+    admin_only_prefixes = (
+        f"{settings.api_prefix}/system",
+        f"{settings.api_prefix}/users",
+        f"{settings.api_prefix}/operations",
+        f"{settings.api_prefix}/runtime-nodes",
+        f"{settings.api_prefix}/instances",
+    )
+    developer_prefixes = (
+        f"{settings.api_prefix}/algorithms/import",
+        f"{settings.api_prefix}/build-jobs",
+        f"{settings.api_prefix}/deployment-manifests",
+    )
+
+    @app.middleware("http")
+    async def security_middleware(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID", str(uuid4()))
+        request.state.request_id = request_id
+        authorization = request.headers.get("Authorization", "")
+        header_token = authorization[7:] if authorization.startswith("Bearer ") else None
+        token = header_token or request.cookies.get("cv_session")
+        request.state.auth_token = token
+        container = get_container()
+        session = container.auth.authenticate(token)
+        request.state.session = session
+        actor = session.username if session else "anonymous"
+        is_api = request.url.path.startswith(settings.api_prefix)
+        if is_api and request.url.path not in public_paths and session is None:
+            return JSONResponse(
+                status_code=401,
+                content={"code": "AUTH_REQUIRED", "message": "请先登录", "request_id": request_id},
+            )
+        if session is not None:
+            from .modules.security.service import UserRole
+
+            version_path = request.url.path.startswith(
+                f"{settings.api_prefix}/algorithm-versions/"
+            )
+            version_build = version_path and request.url.path.endswith("/build")
+            manual_start = (
+                request.url.path.startswith(f"{settings.api_prefix}/algorithms/")
+                and request.url.path.endswith("/start")
+            )
+            admin_path = request.url.path.startswith(admin_only_prefixes) or (
+                version_path and not version_build
+            ) or manual_start
+            if admin_path and session.role is not UserRole.ADMIN:
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "FORBIDDEN", "message": "需要管理员权限", "request_id": request_id},
+                )
+            if (
+                (request.url.path.startswith(developer_prefixes) or version_build)
+                and session.role not in {UserRole.ADMIN, UserRole.DEVELOPER}
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "FORBIDDEN", "message": "需要算法开发者权限", "request_id": request_id},
+                )
+            project_header = request.headers.get("X-Project-ID") or request.query_params.get(
+                "project_id"
+            )
+            project_id = None
+            if project_header:
+                from uuid import UUID
+
+                try:
+                    project_id = UUID(project_header)
+                except ValueError:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"code": "PROJECT_INVALID", "message": "项目 ID 不合法", "request_id": request_id},
+                    )
+            if project_id is None:
+                project_id = container.projects.first_project_id(session.user_id)
+            project_catalog = request.url.path == f"{settings.api_prefix}/projects"
+            auth_path = request.url.path.startswith(f"{settings.api_prefix}/auth/")
+            bypass_project_access = project_catalog or auth_path
+            if bypass_project_access:
+                request.state.project_id = project_id
+            elif project_id is None:
+                return JSONResponse(
+                    status_code=403,
+                    content={"code": "PROJECT_REQUIRED", "message": "当前用户尚未加入项目", "request_id": request_id},
+                )
+            else:
+                viewer_safe_post = request.url.path in {
+                    f"{settings.api_prefix}/assets/download",
+                    f"{settings.api_prefix}/tasks/results/archive",
+                }
+                try:
+                    container.projects.require_access(
+                        project_id,
+                        session.user_id,
+                        write=(
+                            request.method in {"POST", "PUT", "PATCH", "DELETE"}
+                            and not viewer_safe_post
+                        ),
+                    )
+                except Exception as exc:
+                    from .core.errors import ApplicationError
+
+                    if isinstance(exc, ApplicationError):
+                        return JSONResponse(
+                            status_code=exc.status_code,
+                            content={"code": exc.code, "message": exc.message, "request_id": request_id},
+                        )
+                    raise
+                request.state.project_id = project_id
+        if request.method == "POST" and request.url.path in rate_limited_paths:
+            if not container.rate_limiter.allow(f"{actor}:{request.url.path}"):
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "code": "RATE_LIMITED",
+                        "message": "请求过于频繁，请稍后重试",
+                        "request_id": request_id,
+                    },
+                )
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        if is_api and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+            from .modules.security.service import AuditEvent
+
+            container.audit_log.add(
+                AuditEvent(
+                    timestamp=datetime.now(UTC),
+                    actor=actor,
+                    method=request.method,
+                    path=request.url.path,
+                    status_code=response.status_code,
+                    request_id=request_id,
+                )
+            )
+        return response
+
+    app.include_router(api_router, prefix=settings.api_prefix)
+
+    @app.get("/health", tags=["system"])
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    return app
+
+
+app = create_app()

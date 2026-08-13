@@ -1,0 +1,1 @@
+"""Asset application services."""

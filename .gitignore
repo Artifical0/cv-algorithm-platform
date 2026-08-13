@@ -1,0 +1,40 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+
+# Node
+node_modules/
+dist/
+.vite/
+coverage/
+
+# Runtime data
+data/
+storage/
+uploads/
+results/
+models/
+*.pt
+*.pth
+*.onnx
+
+# Build and logs
+build/
+logs/
+*.log
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+

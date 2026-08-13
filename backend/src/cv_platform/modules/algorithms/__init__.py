@@ -1,0 +1,2 @@
+"""Algorithm registry module."""
+

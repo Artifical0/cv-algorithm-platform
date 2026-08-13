@@ -1,0 +1,2 @@
+"""Task persistence adapters."""
+

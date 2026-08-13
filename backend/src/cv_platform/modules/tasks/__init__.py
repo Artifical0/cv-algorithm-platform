@@ -1,0 +1,2 @@
+"""Inference task module."""
+

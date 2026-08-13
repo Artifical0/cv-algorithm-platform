@@ -1,0 +1,5 @@
+[tool.uv.workspace]
+members = ["backend", "packages/algorithm-sdk", "services/algorithm-manager", "services/media-worker"]
+
+[tool.uv.sources]
+cv-algorithm-sdk = { workspace = true }

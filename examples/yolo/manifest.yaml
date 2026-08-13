@@ -1,0 +1,20 @@
+schema_version: "1.0"
+id: yolo-detector
+name: YOLO Detector
+version: 1.0.0
+description: 基于 Ultralytics 的独立 YOLO 目标检测算法容器
+task_type: object_detection
+runtime:
+  framework: pytorch
+  device: gpu
+  min_memory_mb: 2048
+input:
+  media_types: [image/jpeg, image/png]
+output:
+  type: object_detection
+parameters:
+  confidence:
+    type: number
+    default: 0.4
+    minimum: 0
+    maximum: 1

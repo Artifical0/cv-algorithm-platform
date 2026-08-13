@@ -1,0 +1,4 @@
+services:
+  media-worker:
+    devices:
+      - ${CV_PLATFORM_CAMERA_DEVICE:-/dev/video0}:${CV_PLATFORM_CAMERA_DEVICE:-/dev/video0}

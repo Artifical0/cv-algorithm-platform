@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cv-media-worker"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "opencv-python-headless>=4.11,<5",
+  "pydantic>=2.10,<3",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/media_worker"]

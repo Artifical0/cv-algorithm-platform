@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cv-yolo-algorithm"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "cv-algorithm-sdk",
+  "fastapi>=0.116,<1",
+  "ultralytics>=8.3,<9",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[tool.uv.sources]
+cv-algorithm-sdk = { path = "../../packages/algorithm-sdk", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/yolo_algorithm"]

@@ -1,0 +1,1 @@
+"""Image asset management module."""
