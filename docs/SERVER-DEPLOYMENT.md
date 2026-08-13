@@ -1,6 +1,6 @@
 # 本地服务器部署说明
 
-目标环境：Linux、Docker Engine 26+、Docker Compose v2；GPU 部署需 NVIDIA 驱动、`nvidia-smi` 与 NVIDIA Container Toolkit。当前版本按要求不启动数据库、Redis 或 MinIO。
+目标环境：Linux、Docker Engine 26+、Docker Compose v2；GPU 部署需 NVIDIA 驱动、`nvidia-smi` 与 NVIDIA Container Toolkit。默认配置不启动数据库、Redis 或 MinIO；需要 PostgreSQL 时显式叠加 `compose.database.yaml`。
 
 ## 1. 部署前检查
 
@@ -120,7 +120,29 @@ Manager 端口只应对平台内网开放。调度器按节点/GPU 空闲显存�
 7. 配置灰度权重总和 100，配置扩缩容并观察副本数及 idle 冷却。
 8. 重启 Manager，确认带标签的算法容器重新发现。
 
-## 10. 无数据库恢复与备份
+## 10. PostgreSQL 建库与版本迁移（可选）
+
+项目已经包含类似 Flyway 的 Alembic 版本迁移。先在 `.env` 设置：
+
+```text
+CV_PLATFORM_POSTGRES_DB=cv_platform
+CV_PLATFORM_POSTGRES_USER=cv_platform
+CV_PLATFORM_POSTGRES_PASSWORD=<强随机密码>
+```
+
+首次启动 PostgreSQL 并升级到最新结构：
+
+```powershell
+docker compose -f compose.yaml -f compose.database.yaml --profile database up -d postgres
+docker compose -f compose.yaml -f compose.database.yaml --profile database run --rm database-migrator upgrade head
+docker compose -f compose.yaml -f compose.database.yaml --profile database run --rm database-migrator current
+```
+
+数据库迁移会创建 `alembic_version` 版本表以及 23 张平台业务表。迁移支持回滚，但生产回滚前必须先完成一致性备份。完整操作见 [数据库迁移说明](../database/README.md)。
+
+当前数据库仓储适配器尚未启用；上述操作只准备数据库结构，Backend 仍使用内存仓储。等仓储适配器接入后，再使用数据库 Compose 启动整个平台。
+
+## 11. 无数据库恢复与备份
 
 当前需备份：
 
@@ -128,9 +150,9 @@ Manager 端口只应对平台内网开放。调度器按节点/GPU 空闲显存�
 - `/srv/cv-platform/data`、`packages`、`models`；
 - 算法包和 manifest 是重建镜像的主来源。
 
-API 重启会丢失内存中的任务、结果、审计、会话、项目、成员、灰度权重、扩缩容策略和导入算法索引；文件不会删除。Manager 可通过 Docker 标签恢复实例。服务器准备长期使用时，下一阶段只替换仓储、对象存储和队列实现为 PostgreSQL、MinIO、Redis/Celery。
+API 重启会丢失内存中的任务、结果、审计、会话、项目、成员、灰度权重、扩缩容策略和导入算法索引；文件不会删除。Manager 可通过 Docker 标签恢复实例。数据库表结构和版本机制已经就绪，服务器准备长期使用时只需接入 PostgreSQL 仓储、MinIO 和 Redis/Celery 适配器。
 
-## 11. BentoML 与 KServe
+## 12. BentoML 与 KServe
 
 算法详情可导出：
 

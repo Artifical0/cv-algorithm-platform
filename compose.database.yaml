@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    profiles: ["database"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${CV_PLATFORM_POSTGRES_DB:-cv_platform}
+      POSTGRES_USER: ${CV_PLATFORM_POSTGRES_USER:-cv_platform}
+      POSTGRES_PASSWORD: ${CV_PLATFORM_POSTGRES_PASSWORD:?set CV_PLATFORM_POSTGRES_PASSWORD}
+    volumes:
+      - cv-platform-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - default
+
+  database-migrator:
+    build:
+      context: .
+      dockerfile: infra/docker/database-migrator.Dockerfile
+    image: cv-platform/database-migrator:dev
+    profiles: ["database"]
+    environment:
+      CV_PLATFORM_POSTGRES_HOST: postgres
+      CV_PLATFORM_POSTGRES_PORT: "5432"
+      CV_PLATFORM_POSTGRES_DB: ${CV_PLATFORM_POSTGRES_DB:-cv_platform}
+      CV_PLATFORM_POSTGRES_USER: ${CV_PLATFORM_POSTGRES_USER:-cv_platform}
+      CV_PLATFORM_POSTGRES_PASSWORD: ${CV_PLATFORM_POSTGRES_PASSWORD}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - default
+
+  backend:
+    environment:
+      CV_PLATFORM_POSTGRES_HOST: postgres
+      CV_PLATFORM_POSTGRES_PORT: "5432"
+      CV_PLATFORM_POSTGRES_DB: ${CV_PLATFORM_POSTGRES_DB:-cv_platform}
+      CV_PLATFORM_POSTGRES_USER: ${CV_PLATFORM_POSTGRES_USER:-cv_platform}
+      CV_PLATFORM_POSTGRES_PASSWORD: ${CV_PLATFORM_POSTGRES_PASSWORD}
+    depends_on:
+      database-migrator:
+        condition: service_completed_successfully
+
+volumes:
+  cv-platform-postgres:
+    name: cv-algorithm-platform-postgres

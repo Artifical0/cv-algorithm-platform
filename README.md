@@ -32,6 +32,7 @@ cv-algorithm-platform/
 │   └── yolo/                    # 第二个验证算法
 ├── infra/
 │   └── docker/                  # 本地服务器与基础服务部署
+├── database/                    # PostgreSQL Alembic 版本迁移
 ├── docs/                        # PRD、架构和接口文档
 └── tests/                       # 跨服务协议与集成测试
 ```
@@ -41,7 +42,7 @@ cv-algorithm-platform/
 - MVP：安全算法导入、独立 Docker 容器、图片推理、统一结果、多算法对比。
 - V1：五类 CV 结果、版本治理、项目级 RBAC、SSE、结果归档、GPU/LRU 治理。
 - V2：视频/摄像头/RTSP、多 GPU/多节点、DAG、BentoML/KServe、灰度与自动扩缩容。
-- 当前按要求不创建数据库；持久化组件仅保留替换边界。
+- PostgreSQL 首版表结构与 Alembic 版本迁移已就绪；默认运行仍不创建数据库。
 
 详见 [功能覆盖矩阵](docs/FEATURE-COVERAGE.md) 与 [服务器部署说明](docs/SERVER-DEPLOYMENT.md)。
 
@@ -87,4 +88,6 @@ CV_PLATFORM_ADMIN_PASSWORD=<至少 12 位强密码>
 .\scripts\verify.ps1
 ```
 
-当前阶段不使用数据库。算法注册、任务、结果、会话和审计位于内存；图片、模型与算法包使用受控文件目录；Algorithm Manager 重启后会通过 Docker 标签恢复其管理的容器索引。
+当前运行时尚未启用数据库仓储。算法注册、任务、结果、会话和审计位于内存；图片、模型与算法包使用受控文件目录；Algorithm Manager 重启后会通过 Docker 标签恢复其管理的容器索引。
+
+服务器持久化阶段已准备 PostgreSQL 迁移，详见 [数据库迁移说明](database/README.md)。它支持版本查询、升级、回滚和离线 SQL 导出，且不会在本地自动建库。

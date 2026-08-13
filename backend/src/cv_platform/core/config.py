@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     rate_limit_requests: int = 60
     rate_limit_window_seconds: int = 60
     autoscaling_reconcile_seconds: int = Field(default=15, ge=5, le=3600)
+    database_url: str | None = None
+    postgres_host: str = "localhost"
+    postgres_port: int = Field(default=5432, ge=1, le=65535)
+    postgres_db: str = "cv_platform"
+    postgres_user: str = "cv_platform"
+    postgres_password: str | None = None
 
 
 @lru_cache
