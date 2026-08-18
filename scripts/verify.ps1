@@ -54,18 +54,27 @@ $env:PYTHONPATH = Join-Path $ProjectRoot 'services\algorithm-manager\src'
 python scripts\manager_smoke.py
 Remove-Item Env:\PYTHONPATH
 
-if (Test-Path frontend\node_modules) {
+$frontendTool = if ($IsWindows) {
+    'frontend\node_modules\.bin\vue-tsc.cmd'
+} else {
+    'frontend/node_modules/.bin/vue-tsc'
+}
+
+if (Test-Path -LiteralPath $frontendTool) {
     Write-Output '9/9 Frontend checks'
     Push-Location frontend
     try {
         npm run typecheck
+        if ($LASTEXITCODE -ne 0) { throw 'Frontend typecheck failed' }
         npm test
+        if ($LASTEXITCODE -ne 0) { throw 'Frontend tests failed' }
         npm run build
+        if ($LASTEXITCODE -ne 0) { throw 'Frontend build failed' }
     } finally {
         Pop-Location
     }
 } else {
-    Write-Output '9/9 Frontend checks SKIPPED: node_modules is not installed'
+    Write-Output '9/9 Frontend checks SKIPPED: host-compatible node_modules is not installed'
 }
 
 Write-Output 'Verification completed.'

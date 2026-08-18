@@ -6,6 +6,7 @@ export interface Session {
   role: string
   default_project_id: string | null
   expires_at: string
+  authentication_enabled: boolean
 }
 export interface User {
   id: string; username: string; role: 'admin' | 'developer' | 'user'; enabled: boolean; created_at: string
@@ -17,12 +18,14 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     })
-    sessionToken.set()
-    sessionRole.set(session.role)
-    if (session.default_project_id) projectContext.set(session.default_project_id)
+    applySession(session)
     return session
   },
-  me: () => request<Session>('/auth/me'),
+  me: async () => {
+    const session = await request<Session>('/auth/me')
+    applySession(session)
+    return session
+  },
   users: () => request<User[]>('/users'),
   createUser: (payload: { username: string; password: string; role: User['role'] }) =>
     request<User>('/users', { method: 'POST', body: JSON.stringify(payload) }),
@@ -32,8 +35,16 @@ export const authApi = {
     await request<void>('/auth/logout', { method: 'POST' })
     sessionToken.clear()
     sessionRole.clear()
+    authenticationMode.clear()
     projectContext.clear()
   },
+}
+
+function applySession(session: Session) {
+  sessionToken.set()
+  sessionRole.set(session.role)
+  authenticationMode.set(session.authentication_enabled)
+  if (session.default_project_id) projectContext.set(session.default_project_id)
 }
 
 const sessionRoleKey = 'cv-platform-session-role'
@@ -41,4 +52,11 @@ export const sessionRole = {
   get: () => localStorage.getItem(sessionRoleKey),
   set: (role: string) => localStorage.setItem(sessionRoleKey, role),
   clear: () => localStorage.removeItem(sessionRoleKey),
+}
+
+const authenticationModeKey = 'cv-platform-authentication-enabled'
+export const authenticationMode = {
+  get: () => localStorage.getItem(authenticationModeKey) === 'true',
+  set: (enabled: boolean) => localStorage.setItem(authenticationModeKey, String(enabled)),
+  clear: () => localStorage.removeItem(authenticationModeKey),
 }

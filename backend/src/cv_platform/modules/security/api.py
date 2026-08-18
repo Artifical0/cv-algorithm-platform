@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, Field
 
+from ...core.config import get_settings
 from ...core.errors import ApplicationError
 from ...dependencies import get_container
 from .service import UserRole
@@ -23,6 +24,7 @@ class SessionResponse(BaseModel):
     role: str
     expires_at: datetime
     default_project_id: UUID | None = None
+    authentication_enabled: bool
 
 
 class CreateUserRequest(BaseModel):
@@ -50,8 +52,6 @@ def login(
     response: Response,
     container=Depends(get_container),
 ) -> SessionResponse:
-    from ...core.config import get_settings
-
     session = container.auth.login(payload.username, payload.password)
     if session is None:
         raise ApplicationError("AUTH_INVALID", "用户名或密码错误", 401)
@@ -70,12 +70,13 @@ def login(
         role=session.role.value,
         expires_at=session.expires_at,
         default_project_id=container.projects.first_project_id(session.user_id),
+        authentication_enabled=get_settings().auth_enabled,
     )
 
 
 @router.get("/auth/me", response_model=SessionResponse)
 def me(request: Request, container=Depends(get_container)) -> SessionResponse:
-    session = container.auth.authenticate(getattr(request.state, "auth_token", None))
+    session = getattr(request.state, "session", None)
     if session is None:
         raise ApplicationError("AUTH_REQUIRED", "请先登录", 401)
     return SessionResponse(
@@ -84,6 +85,7 @@ def me(request: Request, container=Depends(get_container)) -> SessionResponse:
         role=session.role.value,
         expires_at=session.expires_at,
         default_project_id=container.projects.first_project_id(session.user_id),
+        authentication_enabled=get_settings().auth_enabled,
     )
 
 
@@ -134,7 +136,7 @@ def update_user(
     request: Request,
     container=Depends(get_container),
 ) -> UserResponse:
-    session = container.auth.authenticate(getattr(request.state, "auth_token", None))
+    session = getattr(request.state, "session", None)
     if session and session.user_id == user_id and payload.enabled is False:
         raise ApplicationError("USER_INVALID", "不能停用当前登录账号", 409)
     try:

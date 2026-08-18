@@ -64,7 +64,7 @@ async function submitTask() {
     <div>
       <span class="eyebrow">LOCAL ASYNC INFERENCE</span>
       <h1>上传一张图片，运行不同的<br /><em>视觉算法容器</em></h1>
-      <p>本地无数据库模式已支持受控图片存储、异步任务、容器复用和标准结果校验。</p>
+      <p>PostgreSQL 持久化模式已支持受控图片存储、异步任务、容器复用和标准结果校验。</p>
     </div>
     <div class="hero-metric">
       <span>已注册算法</span><strong>{{ algorithms.length.toString().padStart(2, '0') }}</strong>

@@ -22,7 +22,7 @@
 | FR-VIS-001/002 可视化 | 已实现 | 五类渲染器、图层/类别/置信度、缩放、原图、JSON/PNG 下载 |
 | FR-VIS-003 多算法对比 | 已实现 | 并排/叠加、参数、版本、推理耗时、统一结果展示 |
 | 结果批量归档 | 已实现 | 最多 100 个任务结果 JSON + 参数/版本 manifest ZIP |
-| 认证、RBAC、项目权限 | 已实现（PostgreSQL） | admin/developer/user；项目 owner/editor/viewer；会话和核心实体按 `project_id` 持久化隔离 |
+| 认证、RBAC、项目权限 | 已实现（PostgreSQL） | 支持可配置免登录管理员模式；启用认证后使用 admin/developer/user、项目 owner/editor/viewer、持久化会话及 `project_id` 隔离 |
 | 用户管理 | 已实现（PostgreSQL） | 用户创建、角色更新、启用/停用、会话撤销、项目成员管理 |
 | 审计与限流 | 已实现 | 写操作审计持久化到 PostgreSQL；上传/构建/推理使用进程内滑动窗口限流；安全错误响应 |
 | GPU、容器、日志 | 已实现 | GPU/显存、实例、节点、具体 GPU 索引、容器日志、审计事件 |

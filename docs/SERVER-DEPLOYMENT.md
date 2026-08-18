@@ -43,13 +43,14 @@ CPU-only 节点可跳过最后两项，但 GPU manifest 的算法不能在该节
 ```text
 CV_PLATFORM_ADMIN_USERNAME=admin
 CV_PLATFORM_ADMIN_PASSWORD=<至少 12 位强密码>
+CV_PLATFORM_AUTH_ENABLED=false
 CV_PLATFORM_DATA_ROOT=/srv/cv-platform/data
 CV_PLATFORM_MODEL_ROOT=/srv/cv-platform/models
 CV_PLATFORM_PACKAGE_ROOT=/srv/cv-platform/packages
 CV_PLATFORM_SECURE_COOKIES=false
 ```
 
-若前面有 HTTPS 反向代理，将 `CV_PLATFORM_SECURE_COOKIES=true`。不要提交 `.env`。
+`CV_PLATFORM_AUTH_ENABLED=false` 时前端隐藏登录和退出入口，Backend 直接以内置管理员身份处理请求，适合隔离的 GPU 测试服务器。若服务器可能被不受信任的用户访问，必须设置 `CV_PLATFORM_AUTH_ENABLED=true`；若前面有 HTTPS 反向代理，同时将 `CV_PLATFORM_SECURE_COOKIES=true`。不要提交 `.env`。
 
 ## 4. 验证代码与配置
 
@@ -81,7 +82,7 @@ docker compose -f compose.yaml -f compose.database.yaml --profile database ps
 docker compose -f compose.yaml -f compose.database.yaml --profile database logs --tail 200 backend postgres algorithm-manager media-worker
 ```
 
-访问 `http://<服务器IP>:8080`。第一次登录使用 `.env` 中的管理员账号。
+访问 `http://<服务器IP>:8080`。免登录模式会直接进入工作台；启用认证后使用 `.env` 中的管理员账号登录。
 
 ## 6. 摄像头、视频与 RTSP
 

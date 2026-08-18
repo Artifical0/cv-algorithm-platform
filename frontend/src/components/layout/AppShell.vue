@@ -2,9 +2,10 @@
 import { useRouter } from 'vue-router'
 import { computed } from 'vue'
 
-import { authApi, sessionRole } from '@/api/auth'
+import { authenticationMode, authApi, sessionRole } from '@/api/auth'
 
 const router = useRouter()
+const authenticationEnabled = authenticationMode.get()
 const navigation = [
   { label: '工作台', to: '/', icon: '⌂' },
   { label: '算法中心', to: '/algorithms', icon: '◇' },
@@ -52,7 +53,7 @@ async function logout() {
           <strong>多算法计算机视觉平台</strong>
         </div>
         <span class="phase-badge">MVP · FEATURE COMPLETE</span>
-        <button class="secondary-button" @click="logout">退出</button>
+        <button v-if="authenticationEnabled" class="secondary-button" @click="logout">退出</button>
       </header>
       <div class="page-content"><slot /></div>
     </main>

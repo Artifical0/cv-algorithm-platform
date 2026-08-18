@@ -16,6 +16,8 @@ node_modules/
 dist/
 .vite/
 coverage/
+/frontend/vite.config.js
+/frontend/vite.config.d.ts
 
 # Runtime data
 data/

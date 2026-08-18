@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     max_package_files: int = 10_000
     admin_username: str = "admin"
     admin_password: str = "ChangeMe-Local-123!"
+    auth_enabled: bool = True
     session_ttl_seconds: int = 8 * 60 * 60
     secure_cookies: bool = False
     media_worker_url: str = "http://localhost:8020"

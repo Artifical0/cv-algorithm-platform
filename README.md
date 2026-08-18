@@ -66,7 +66,7 @@ cv-algorithm-platform/
 
 ## Docker 本地全栈预览
 
-复制环境变量并修改管理员密码、数据库密码：
+复制环境变量并修改管理员密码、数据库密码。默认 `CV_PLATFORM_AUTH_ENABLED=false`，浏览器会直接以内置管理员身份进入平台，不显示登录页：
 
 ```powershell
 Copy-Item .env.example .env
@@ -100,6 +100,14 @@ docker compose -f compose.yaml -f compose.database.yaml --profile database up -d
 CV_PLATFORM_ADMIN_USERNAME=admin
 CV_PLATFORM_ADMIN_PASSWORD=<至少 12 位强密码>
 ```
+
+需要恢复登录与会话校验时设置：
+
+```text
+CV_PLATFORM_AUTH_ENABLED=true
+```
+
+免登录模式仅适合本机或受信任内网；对公网开放前必须恢复登录，并配置 HTTPS 与安全 Cookie。
 
 准备服务器目录和验证项目：
 

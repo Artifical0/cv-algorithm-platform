@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { sessionToken } from '@/api/http'
-import { sessionRole } from '@/api/auth'
+import { authApi, sessionRole } from '@/api/auth'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -21,9 +21,25 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  if (!to.meta.public && !sessionToken.get()) return { name: 'login', query: { redirect: to.fullPath } }
-  if (to.name === 'login' && sessionToken.get()) return { name: 'workspace' }
+let authenticationInitialized = false
+
+async function initializeAuthentication(): Promise<boolean> {
+  if (authenticationInitialized) return Boolean(sessionToken.get())
+  authenticationInitialized = true
+  try {
+    await authApi.me()
+    return true
+  } catch {
+    sessionToken.clear()
+    sessionRole.clear()
+    return false
+  }
+}
+
+router.beforeEach(async (to) => {
+  const authenticated = await initializeAuthentication()
+  if (!to.meta.public && !authenticated) return { name: 'login', query: { redirect: to.fullPath } }
+  if (to.name === 'login' && authenticated) return { name: 'workspace' }
   const roles = to.meta.roles as string[] | undefined
   if (roles && !roles.includes(sessionRole.get() ?? 'user')) return { name: 'workspace' }
 })

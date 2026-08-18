@@ -6,13 +6,13 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from cv_algorithm_sdk import TaskStatus
 
 from .api.router import api_router
 from .core.config import get_settings
 from .core.errors import install_exception_handlers
 from .core.seed import seed_demo_data
 from .dependencies import get_container
-from cv_algorithm_sdk import TaskStatus
 
 
 def create_app() -> FastAPI:
@@ -100,7 +100,18 @@ def create_app() -> FastAPI:
         token = header_token or request.cookies.get("cv_session")
         request.state.auth_token = token
         container = get_container()
-        session = container.auth.authenticate(token)
+        if settings.auth_enabled:
+            session = container.auth.authenticate(token)
+        else:
+            from .modules.security.service import Session, UserRole
+
+            session = Session(
+                token="",
+                user_id=container.auth.initial_admin_id,
+                username=settings.admin_username.strip().lower(),
+                role=UserRole.ADMIN,
+                expires_at=datetime.max.replace(tzinfo=UTC),
+            )
         request.state.session = session
         actor = session.username if session else "anonymous"
         is_api = request.url.path.startswith(settings.api_prefix)

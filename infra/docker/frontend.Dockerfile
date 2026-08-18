@@ -2,7 +2,8 @@ FROM node:22-alpine AS build
 
 WORKDIR /app
 COPY frontend/package*.json ./
-RUN npm install --package-lock-only && npm ci
+ARG NPM_REGISTRY=https://registry.npmjs.org
+RUN npm ci --no-audit --no-fund --registry=$NPM_REGISTRY
 COPY frontend/ ./
 RUN npm run build
 
