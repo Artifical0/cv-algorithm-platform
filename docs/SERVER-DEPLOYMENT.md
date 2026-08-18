@@ -1,6 +1,6 @@
 # 本地服务器部署说明
 
-目标环境：Linux、Docker Engine 26+、Docker Compose v2；GPU 部署需 NVIDIA 驱动、`nvidia-smi` 与 NVIDIA Container Toolkit。默认配置不启动数据库、Redis 或 MinIO；需要 PostgreSQL 时显式叠加 `compose.database.yaml`。
+目标环境：Linux、Docker Engine 26+、Docker Compose v2；GPU 部署需 NVIDIA 驱动、`nvidia-smi` 与 NVIDIA Container Toolkit。生产运行应叠加 `compose.database.yaml`，由 PostgreSQL 保存平台业务数据。
 
 ## 1. 部署前检查
 
@@ -58,7 +58,7 @@ CV_PLATFORM_SECURE_COOKIES=false
 docker compose config --quiet
 ```
 
-`verify.ps1` 检查 Python 语法、TOML/YAML、架构边界、无数据库约束和 Manager 多副本自检；已安装依赖时还会运行 pytest 与前端构建。
+`verify.ps1` 检查 Python 语法、TOML/YAML、架构边界、数据库适配边界和 Manager 多副本自检；已安装依赖时还会运行 pytest 与前端构建。
 
 ## 5. 构建与启动
 
@@ -72,14 +72,13 @@ docker pull node:22-alpine
 docker pull nginx:1.27-alpine
 ```
 
-再构建并启动：
+再构建并启动算法镜像与 PostgreSQL 全栈：
 
 ```powershell
 docker compose --profile algorithm-images build faster-rcnn yolo
-docker compose build algorithm-manager media-worker backend frontend
-docker compose up -d algorithm-manager media-worker backend frontend
-docker compose ps
-docker compose logs --tail 200 algorithm-manager media-worker backend
+docker compose -f compose.yaml -f compose.database.yaml --profile database up -d --build
+docker compose -f compose.yaml -f compose.database.yaml --profile database ps
+docker compose -f compose.yaml -f compose.database.yaml --profile database logs --tail 200 backend postgres algorithm-manager media-worker
 ```
 
 访问 `http://<服务器IP>:8080`。第一次登录使用 `.env` 中的管理员账号。
@@ -120,7 +119,7 @@ Manager 端口只应对平台内网开放。调度器按节点/GPU 空闲显存�
 7. 配置灰度权重总和 100，配置扩缩容并观察副本数及 idle 冷却。
 8. 重启 Manager，确认带标签的算法容器重新发现。
 
-## 10. PostgreSQL 建库与版本迁移（可选）
+## 10. PostgreSQL 建库与版本迁移
 
 项目已经包含类似 Flyway 的 Alembic 版本迁移。先在 `.env` 设置：
 
@@ -140,9 +139,9 @@ docker compose -f compose.yaml -f compose.database.yaml --profile database run -
 
 数据库迁移会创建 `alembic_version` 版本表以及 23 张平台业务表。迁移支持回滚，但生产回滚前必须先完成一致性备份。完整操作见 [数据库迁移说明](../database/README.md)。
 
-当前数据库仓储适配器尚未启用；上述操作只准备数据库结构，Backend 仍使用内存仓储。等仓储适配器接入后，再使用数据库 Compose 启动整个平台。
+数据库组合会为 Backend 设置 `CV_PLATFORM_PERSISTENCE_BACKEND=postgres`。系统健康接口中的 `services.database` 应返回 `ok`；返回 `unavailable` 时 Backend 会以降级状态报告，不应继续上线。
 
-## 11. 无数据库恢复与备份
+## 11. 恢复与备份
 
 当前需备份：
 
@@ -150,7 +149,9 @@ docker compose -f compose.yaml -f compose.database.yaml --profile database run -
 - `/srv/cv-platform/data`、`packages`、`models`；
 - 算法包和 manifest 是重建镜像的主来源。
 
-API 重启会丢失内存中的任务、结果、审计、会话、项目、成员、灰度权重、扩缩容策略和导入算法索引；文件不会删除。Manager 可通过 Docker 标签恢复实例。数据库表结构和版本机制已经就绪，服务器准备长期使用时只需接入 PostgreSQL 仓储、MinIO 和 Redis/Celery 适配器。
+业务元数据和登录会话保存在 PostgreSQL，API 重启不会丢失。重启时尚未结束的进程内任务会标记为 `TASK_INTERRUPTED` 或对应的中断失败状态，之后可重试。Manager 可通过 Docker 标签恢复算法实例索引。
+
+建议定期使用 `pg_dump` 备份 PostgreSQL，同时备份 `/srv/cv-platform/data`、`packages` 和 `models`。数据库记录与文件目录应作为同一恢复点管理。后续若需要多 Backend 副本或可靠任务续跑，再将进程内线程池替换为 Redis/Celery 等持久队列。
 
 ## 12. BentoML 与 KServe
 

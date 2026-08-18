@@ -1,6 +1,9 @@
 from dataclasses import dataclass, replace
 from threading import RLock
 
+from psycopg.types.json import Jsonb
+
+from ...core.database import Database
 from ...core.errors import ApplicationError
 from ..instances.domain.models import RuntimeInstance, RuntimeRequest
 from ..instances.infrastructure.http_gateway import HttpAlgorithmManagerGateway
@@ -15,23 +18,70 @@ class RuntimeNode:
 
 
 class ClusterAlgorithmManagerGateway:
-    def __init__(self, default_manager_url: str) -> None:
+    def __init__(
+        self,
+        default_manager_url: str,
+        database: Database | None = None,
+    ) -> None:
+        self._database = database
         self._nodes: dict[str, RuntimeNode] = {
             "local": RuntimeNode("local", "Local Docker Node", default_manager_url)
         }
         self._instance_routes: dict[str, str] = {}
         self._lock = RLock()
+        if self._database is not None:
+            with self._database.connect() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO runtime_nodes (
+                        id, name, manager_url, enabled, metadata, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, now(), now())
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        manager_url = EXCLUDED.manager_url,
+                        updated_at = now()
+                    """,
+                    ("local", "Local Docker Node", default_manager_url, True, Jsonb({})),
+                )
 
     def register_node(self, node: RuntimeNode) -> RuntimeNode:
         if not node.manager_url.startswith(("http://", "https://")):
             raise ApplicationError("NODE_INVALID", "节点 Manager URL 必须使用 HTTP(S)")
-        with self._lock:
-            self._nodes[node.id] = node
+        if self._database is None:
+            with self._lock:
+                self._nodes[node.id] = node
+        else:
+            with self._database.connect() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO runtime_nodes (
+                        id, name, manager_url, enabled, metadata, created_at, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, now(), now())
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = EXCLUDED.name,
+                        manager_url = EXCLUDED.manager_url,
+                        enabled = EXCLUDED.enabled,
+                        updated_at = now()
+                    """,
+                    (node.id, node.name, node.manager_url, node.enabled, Jsonb({})),
+                )
         return node
 
     def list_nodes(self) -> list[RuntimeNode]:
-        with self._lock:
-            return list(self._nodes.values())
+        if self._database is None:
+            with self._lock:
+                return list(self._nodes.values())
+        with self._database.connect() as connection, connection.cursor() as cursor:
+            cursor.execute("SELECT id, name, manager_url, enabled FROM runtime_nodes ORDER BY id")
+            return [
+                RuntimeNode(
+                    id=str(row["id"]),
+                    name=str(row["name"]),
+                    manager_url=str(row["manager_url"]),
+                    enabled=bool(row["enabled"]),
+                )
+                for row in cursor.fetchall()
+            ]
 
     def list_instances(self) -> list[RuntimeInstance]:
         instances = []
@@ -197,8 +247,7 @@ class ClusterAlgorithmManagerGateway:
         return self._gateway_for_instance(instance_id).touch(instance_id)
 
     def _enabled_nodes(self) -> list[RuntimeNode]:
-        with self._lock:
-            return [node for node in self._nodes.values() if node.enabled]
+        return [node for node in self.list_nodes() if node.enabled]
 
     def _gateway(self, node: RuntimeNode) -> HttpAlgorithmManagerGateway:
         return HttpAlgorithmManagerGateway(node.manager_url, node_id=node.id)
@@ -206,12 +255,12 @@ class ClusterAlgorithmManagerGateway:
     def _gateway_for_instance(self, instance_id: str) -> HttpAlgorithmManagerGateway:
         with self._lock:
             node_id = self._instance_routes.get(instance_id)
-            node = self._nodes.get(node_id) if node_id else None
+        node = next((item for item in self.list_nodes() if item.id == node_id), None)
         if node is None:
             self.list_instances()
             with self._lock:
                 node_id = self._instance_routes.get(instance_id)
-                node = self._nodes.get(node_id) if node_id else None
+            node = next((item for item in self.list_nodes() if item.id == node_id), None)
         if node is None:
             raise ApplicationError("INSTANCE_NOT_FOUND", "算法实例不存在", 404)
         return self._gateway(node)

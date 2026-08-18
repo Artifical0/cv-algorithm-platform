@@ -5,13 +5,14 @@ from ....core.errors import ApplicationError
 from ...tasks.application.service import TaskService
 from ..domain.entities import AlgorithmComparison
 from ..infrastructure.memory_repository import InMemoryComparisonRepository
+from ..infrastructure.postgres_repository import PostgresComparisonRepository
 from ....core.project_context import DEFAULT_PROJECT_ID
 
 
 class ComparisonService:
     def __init__(
         self,
-        repository: InMemoryComparisonRepository,
+        repository: InMemoryComparisonRepository | PostgresComparisonRepository,
         tasks: TaskService,
         project_id: UUID = DEFAULT_PROJECT_ID,
         actor: str = "local-admin",

@@ -1,6 +1,6 @@
 # PostgreSQL 数据库迁移
 
-本目录提供类似 Flyway 的版本化数据库迁移。迁移按 `revision` 严格排序，已执行版本记录在数据库的 `alembic_version` 表中。当前应用仍默认使用内存仓储；除非显式运行数据库 Compose 配置或迁移命令，否则不会创建、连接或修改数据库。
+本目录提供类似 Flyway 的版本化数据库迁移。迁移按 `revision` 严格排序，已执行版本记录在数据库的 `alembic_version` 表中。叠加 `compose.database.yaml` 后，Backend 会使用 PostgreSQL 业务仓储；只运行基础 `compose.yaml` 时仍可使用内存模式开发。
 
 ## 目录
 
@@ -46,7 +46,9 @@ docker compose -f compose.yaml -f compose.database.yaml --profile database run -
 docker compose -f compose.yaml -f compose.database.yaml --profile database up -d
 ```
 
-注意：迁移脚本和数据库已经就绪，但 PostgreSQL 仓储适配器尚未替换当前内存仓储。现阶段给 Backend 注入数据库地址不会改变业务数据的保存位置，后续接入仓储时无需重做表结构和版本机制。
+`compose.database.yaml` 会设置 `CV_PLATFORM_PERSISTENCE_BACKEND=postgres`。直接运行 Backend 时也必须显式设置该变量，否则默认保留内存模式。
+
+首次初始化会幂等创建 `.env` 中配置的管理员和默认项目。管理员一旦写入数据库，后续只修改 `.env` 密码不会覆盖已有密码；生产环境密码轮换应通过专用管理流程执行。
 
 ## 不启动数据库，仅生成 SQL
 

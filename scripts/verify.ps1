@@ -15,11 +15,16 @@ for path in Path('.').rglob('pyproject.toml'):
 '@ | python -
 
 Write-Output '3/9 YAML syntax'
-yq '.' compose.yaml | Out-Null
-yq '.' compose.camera.yaml | Out-Null
-yq '.' compose.database.yaml | Out-Null
-Get-ChildItem examples -Recurse -File -Include '*.yaml','*.yml' | ForEach-Object {
-    yq '.' $_.FullName | Out-Null
+if (Get-Command yq -ErrorAction SilentlyContinue) {
+    yq '.' compose.yaml | Out-Null
+    yq '.' compose.camera.yaml | Out-Null
+    yq '.' compose.database.yaml | Out-Null
+    Get-ChildItem examples -Recurse -File -Include '*.yaml','*.yml' | ForEach-Object {
+        yq '.' $_.FullName | Out-Null
+    }
+} else {
+    docker compose -f compose.yaml -f compose.database.yaml --profile database config --quiet
+    Write-Output 'Example manifest YAML checks SKIPPED: yq is not installed'
 }
 
 Write-Output '4/9 Architecture boundaries'
@@ -28,9 +33,11 @@ if ($dockerLeaks) { throw "Platform API imports Docker SDK: $dockerLeaks" }
 $directFetch = rg -l '\bfetch\(' frontend\src | Where-Object { $_ -ne 'frontend\src\api\http.ts' }
 if ($directFetch) { throw "Frontend bypasses API client: $directFetch" }
 
-Write-Output '5/9 Runtime services keep database adapters optional'
-$databaseLeaks = rg -n 'sqlalchemy|psycopg|aiosqlite|sqlite3|asyncpg|mysqlclient' backend services compose.yaml
-if ($databaseLeaks) { throw "Database dependency found: $databaseLeaks" }
+Write-Output '5/9 PostgreSQL adapter boundaries'
+$managerDatabaseLeaks = rg -n 'sqlalchemy|psycopg|aiosqlite|sqlite3|asyncpg|mysqlclient' services
+if ($managerDatabaseLeaks) { throw "Database dependency leaked into runtime services: $managerDatabaseLeaks" }
+$backendDependency = Select-String -Path backend\pyproject.toml -SimpleMatch 'psycopg[binary]'
+if (-not $backendDependency) { throw 'Backend PostgreSQL driver is missing' }
 
 Write-Output '6/9 Database migration chain'
 python scripts/verify_database_migrations.py

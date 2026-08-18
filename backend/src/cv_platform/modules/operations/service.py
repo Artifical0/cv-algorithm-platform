@@ -7,6 +7,7 @@ import math
 
 from cv_algorithm_sdk import TaskStatus
 
+from ...core.database import Database
 from ...core.errors import ApplicationError
 from ..algorithms.domain.repositories import AlgorithmRepository
 from ..tasks.domain.repositories import TaskRepository
@@ -29,10 +30,12 @@ class OperationsService:
         algorithms: AlgorithmRepository,
         tasks: TaskRepository,
         instances: RuntimeInstanceService,
+        database: Database | None = None,
     ) -> None:
         self._algorithms = algorithms
         self._tasks = tasks
         self._instances = instances
+        self._database = database
         self._policies: dict[UUID, AutoscalingPolicy] = {}
         self._last_active_at: dict[UUID, datetime] = {}
         self._lock = RLock()
@@ -77,14 +80,52 @@ class OperationsService:
             idle_seconds,
             datetime.now(UTC),
         )
+        if self._database is None:
+            with self._lock:
+                self._policies[algorithm_version_id] = policy
+        else:
+            with self._database.connect() as connection, connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    INSERT INTO autoscaling_policies (
+                        algorithm_version_id, min_replicas, max_replicas,
+                        target_concurrency, idle_seconds, updated_at
+                    ) VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (algorithm_version_id) DO UPDATE SET
+                        min_replicas = EXCLUDED.min_replicas,
+                        max_replicas = EXCLUDED.max_replicas,
+                        target_concurrency = EXCLUDED.target_concurrency,
+                        idle_seconds = EXCLUDED.idle_seconds,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    (
+                        policy.algorithm_version_id, policy.min_replicas,
+                        policy.max_replicas, policy.target_concurrency,
+                        policy.idle_seconds, policy.updated_at,
+                    ),
+                )
         with self._lock:
-            self._policies[algorithm_version_id] = policy
             self._last_active_at.setdefault(algorithm_version_id, policy.updated_at)
         return policy
 
     def list_policies(self, project_id: UUID | None = None) -> list[AutoscalingPolicy]:
-        with self._lock:
-            policies = list(self._policies.values())
+        if self._database is None:
+            with self._lock:
+                policies = list(self._policies.values())
+        else:
+            with self._database.connect() as connection, connection.cursor() as cursor:
+                cursor.execute("SELECT * FROM autoscaling_policies ORDER BY algorithm_version_id")
+                policies = [
+                    AutoscalingPolicy(
+                        algorithm_version_id=row["algorithm_version_id"],
+                        min_replicas=int(row["min_replicas"]),
+                        max_replicas=int(row["max_replicas"]),
+                        target_concurrency=int(row["target_concurrency"]),
+                        idle_seconds=int(row["idle_seconds"]),
+                        updated_at=row["updated_at"],
+                    )
+                    for row in cursor.fetchall()
+                ]
         if project_id is not None:
             policies = [
                 item for item in policies

@@ -42,7 +42,7 @@ cv-algorithm-platform/
 - MVP：安全算法导入、独立 Docker 容器、图片推理、统一结果、多算法对比。
 - V1：五类 CV 结果、版本治理、项目级 RBAC、SSE、结果归档、GPU/LRU 治理。
 - V2：视频/摄像头/RTSP、多 GPU/多节点、DAG、BentoML/KServe、灰度与自动扩缩容。
-- PostgreSQL 首版表结构与 Alembic 版本迁移已就绪；默认运行仍不创建数据库。
+- PostgreSQL 业务仓储与 Alembic 版本迁移已启用；本地全栈脚本会自动建库和迁移。
 
 详见 [功能覆盖矩阵](docs/FEATURE-COVERAGE.md) 与 [服务器部署说明](docs/SERVER-DEPLOYMENT.md)。
 
@@ -64,15 +64,35 @@ cv-algorithm-platform/
 - 所有结果必须通过统一 Schema 校验后才能进入结果中心。
 - MVP 使用单机 Docker，不引入 Kubernetes。
 
-## 当前本地预览
+## Docker 本地全栈预览
 
-安装依赖后分别启动后端和前端，具体命令见[第一轮开发说明](docs/ROUND-1-DEVELOPMENT.md)。也可以构建开发镜像：
+复制环境变量并修改管理员密码、数据库密码：
 
 ```powershell
-docker compose up --build
+Copy-Item .env.example .env
 ```
 
-然后访问 `http://localhost:8080`。
+一条命令构建并启动 PostgreSQL、数据库迁移器、Algorithm Manager、Media Worker、Backend 与 Frontend：
+
+```powershell
+.\scripts\docker-local.ps1 up
+```
+
+也可以直接使用 Compose：
+
+```powershell
+docker compose -f compose.yaml -f compose.database.yaml --profile database up -d --build
+```
+
+启动后访问 `http://localhost:8080`。查看状态、持续日志或停止服务：
+
+```powershell
+.\scripts\docker-local.ps1 status
+.\scripts\docker-local.ps1 logs
+.\scripts\docker-local.ps1 down
+```
+
+`down` 不删除 PostgreSQL 命名卷，下一次启动会保留数据库；如需删除数据库数据，应在确认备份后手工删除 `cv-algorithm-platform-postgres` 卷。
 
 首次部署必须在 `.env` 设置强管理员密码：
 
@@ -88,6 +108,8 @@ CV_PLATFORM_ADMIN_PASSWORD=<至少 12 位强密码>
 .\scripts\verify.ps1
 ```
 
-当前运行时尚未启用数据库仓储。算法注册、任务、结果、会话和审计位于内存；图片、模型与算法包使用受控文件目录；Algorithm Manager 重启后会通过 Docker 标签恢复其管理的容器索引。
+数据库容器会自动完成 Alembic 迁移。用户和会话、项目和成员、算法和构建日志、素材元数据、推理任务和结果、算法对比、媒体源和运行、工作流和运行、运行节点、扩缩容策略及审计均写入 PostgreSQL。图片、视频、模型与算法包本体仍使用受控文件目录；Algorithm Manager 重启后会通过 Docker 标签恢复其管理的容器索引。
 
-服务器持久化阶段已准备 PostgreSQL 迁移，详见 [数据库迁移说明](database/README.md)。它支持版本查询、升级、回滚和离线 SQL 导出，且不会在本地自动建库。
+任务执行器目前仍是 Backend 进程内线程池。平台重启时，未结束的推理、媒体或工作流任务会被持久化标记为中断失败，可在界面中重试，不会伪装为仍在运行。
+
+数据库版本管理详见 [数据库迁移说明](database/README.md)，支持版本查询、升级、回滚和离线 SQL 导出。

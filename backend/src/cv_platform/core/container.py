@@ -1,14 +1,23 @@
 from dataclasses import dataclass
 
+from ..modules.algorithms.domain.repositories import AlgorithmRepository, BuildJobRepository
 from ..modules.algorithms.infrastructure.memory_repository import InMemoryAlgorithmRepository
 from ..modules.algorithms.infrastructure.memory_repository import InMemoryBuildJobRepository
+from ..modules.algorithms.infrastructure.postgres_repository import (
+    PostgresAlgorithmRepository,
+    PostgresBuildJobRepository,
+)
 from ..modules.algorithms.infrastructure.package_storage import AlgorithmPackageStorage
 from ..modules.algorithms.infrastructure.manager_build_gateway import ManagerBuildGateway
 from ..modules.algorithms.infrastructure.local_build_queue import LocalBuildQueue
 from ..modules.assets.infrastructure.local_storage import LocalAssetStorage
 from ..modules.assets.infrastructure.memory_repository import InMemoryAssetRepository
+from ..modules.assets.domain.repositories import AssetRepository
+from ..modules.assets.infrastructure.postgres_repository import PostgresAssetRepository
 from ..modules.scheduling.cluster_gateway import ClusterAlgorithmManagerGateway
 from ..modules.tasks.infrastructure.memory_repository import InMemoryTaskRepository
+from ..modules.tasks.domain.repositories import TaskRepository
+from ..modules.tasks.infrastructure.postgres_repository import PostgresTaskRepository
 from ..modules.tasks.infrastructure.http_prediction_gateway import (
     HttpAlgorithmPredictionGateway,
 )
@@ -17,55 +26,91 @@ from ..modules.instances.application.service import RuntimeInstanceService
 from ..modules.comparisons.infrastructure.memory_repository import (
     InMemoryComparisonRepository,
 )
+from ..modules.comparisons.infrastructure.postgres_repository import (
+    PostgresComparisonRepository,
+)
 from ..modules.security.service import (
     InMemoryAuditLog,
     LocalAuthService,
     SlidingWindowRateLimiter,
 )
+from ..modules.security.postgres_service import PostgresAuditLog, PostgresAuthService
 from ..modules.media.service import InMemoryMediaSourceService
+from ..modules.media.postgres_service import PostgresMediaSourceService
 from ..modules.media.worker_gateway import MediaWorkerGateway
 from ..modules.media.runs import MediaRunService
 from ..modules.media.storage import LocalVideoStorage
 from ..modules.workflows.service import InMemoryWorkflowService
 from ..modules.operations.service import OperationsService
 from ..modules.projects.service import InMemoryProjectService
+from ..modules.projects.postgres_service import PostgresProjectService
 from .config import get_settings
+from .database import Database
 
 
 @dataclass(frozen=True, slots=True)
 class ApplicationContainer:
-    algorithms: InMemoryAlgorithmRepository
-    build_jobs: InMemoryBuildJobRepository
+    algorithms: AlgorithmRepository
+    build_jobs: BuildJobRepository
     package_storage: AlgorithmPackageStorage
     build_gateway: ManagerBuildGateway
     build_queue: LocalBuildQueue
-    assets: InMemoryAssetRepository
+    assets: AssetRepository
     asset_storage: LocalAssetStorage
-    tasks: InMemoryTaskRepository
+    tasks: TaskRepository
     algorithm_manager: ClusterAlgorithmManagerGateway
     task_queue: LocalTaskQueue
-    comparisons: InMemoryComparisonRepository
-    auth: LocalAuthService
-    audit_log: InMemoryAuditLog
+    comparisons: InMemoryComparisonRepository | PostgresComparisonRepository
+    auth: LocalAuthService | PostgresAuthService
+    audit_log: InMemoryAuditLog | PostgresAuditLog
     rate_limiter: SlidingWindowRateLimiter
-    media_sources: InMemoryMediaSourceService
+    media_sources: InMemoryMediaSourceService | PostgresMediaSourceService
     media_worker: MediaWorkerGateway
     media_runs: MediaRunService
     video_storage: LocalVideoStorage
     workflows: InMemoryWorkflowService
     operations: OperationsService
-    projects: InMemoryProjectService
+    projects: InMemoryProjectService | PostgresProjectService
+    database: Database | None
 
 
 def build_container() -> ApplicationContainer:
     settings = get_settings()
-    algorithms = InMemoryAlgorithmRepository()
-    build_jobs = InMemoryBuildJobRepository()
-    assets = InMemoryAssetRepository()
-    tasks = InMemoryTaskRepository()
-    media_sources = InMemoryMediaSourceService()
+    database = None
+    if settings.persistence_backend == "postgres":
+        database = Database.from_settings(settings)
+        if not database.is_healthy():
+            raise RuntimeError("PostgreSQL persistence is configured but unavailable")
+        auth = PostgresAuthService(
+            database,
+            settings.admin_username,
+            settings.admin_password,
+            settings.session_ttl_seconds,
+        )
+        projects = PostgresProjectService(database, auth.initial_admin_id)
+        algorithms = PostgresAlgorithmRepository(database)
+        build_jobs = PostgresBuildJobRepository(database)
+        assets = PostgresAssetRepository(database)
+        tasks = PostgresTaskRepository(database)
+        comparisons = PostgresComparisonRepository(database)
+        audit_log = PostgresAuditLog(database)
+        media_sources = PostgresMediaSourceService(database)
+    else:
+        algorithms = InMemoryAlgorithmRepository()
+        build_jobs = InMemoryBuildJobRepository()
+        assets = InMemoryAssetRepository()
+        tasks = InMemoryTaskRepository()
+        comparisons = InMemoryComparisonRepository()
+        auth = LocalAuthService(
+            settings.admin_username,
+            settings.admin_password,
+            settings.session_ttl_seconds,
+        )
+        projects = InMemoryProjectService(auth.initial_admin_id)
+        audit_log = InMemoryAuditLog()
+        media_sources = InMemoryMediaSourceService()
     media_worker = MediaWorkerGateway(settings.media_worker_url)
-    manager = ClusterAlgorithmManagerGateway(settings.algorithm_manager_url)
+    manager = ClusterAlgorithmManagerGateway(settings.algorithm_manager_url, database)
     build_gateway = ManagerBuildGateway(settings.algorithm_manager_url)
     build_queue = LocalBuildQueue(algorithms, build_jobs, build_gateway)
     instances = RuntimeInstanceService(algorithms, manager)
@@ -76,11 +121,6 @@ def build_container() -> ApplicationContainer:
         instances,
         HttpAlgorithmPredictionGateway(settings.prediction_timeout_seconds),
         settings.task_worker_count,
-    )
-    auth = LocalAuthService(
-        settings.admin_username,
-        settings.admin_password,
-        settings.session_ttl_seconds,
     )
     return ApplicationContainer(
         algorithms=algorithms,
@@ -103,21 +143,22 @@ def build_container() -> ApplicationContainer:
         tasks=tasks,
         algorithm_manager=manager,
         task_queue=task_queue,
-        comparisons=InMemoryComparisonRepository(),
+        comparisons=comparisons,
         auth=auth,
-        audit_log=InMemoryAuditLog(),
+        audit_log=audit_log,
         rate_limiter=SlidingWindowRateLimiter(
             settings.rate_limit_requests,
             settings.rate_limit_window_seconds,
         ),
         media_sources=media_sources,
         media_worker=media_worker,
-        media_runs=MediaRunService(media_sources, media_worker),
+        media_runs=MediaRunService(media_sources, media_worker, database),
         video_storage=LocalVideoStorage(
             settings.storage_root,
             settings.max_video_upload_bytes,
         ),
-        workflows=InMemoryWorkflowService(algorithms),
-        operations=OperationsService(algorithms, tasks, instances),
-        projects=InMemoryProjectService(auth.initial_admin_id),
+        workflows=InMemoryWorkflowService(algorithms, database),
+        operations=OperationsService(algorithms, tasks, instances, database),
+        projects=projects,
+        database=database,
     )

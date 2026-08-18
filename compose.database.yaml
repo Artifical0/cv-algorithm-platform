@@ -41,6 +41,7 @@ services:
 
   backend:
     environment:
+      CV_PLATFORM_PERSISTENCE_BACKEND: postgres
       CV_PLATFORM_POSTGRES_HOST: postgres
       CV_PLATFORM_POSTGRES_PORT: "5432"
       CV_PLATFORM_POSTGRES_DB: ${CV_PLATFORM_POSTGRES_DB:-cv_platform}

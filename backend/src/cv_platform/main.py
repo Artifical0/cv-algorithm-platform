@@ -12,6 +12,7 @@ from .core.config import get_settings
 from .core.errors import install_exception_handlers
 from .core.seed import seed_demo_data
 from .dependencies import get_container
+from cv_algorithm_sdk import TaskStatus
 
 
 def create_app() -> FastAPI:
@@ -20,6 +21,22 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI):
         container = get_container()
+        for task in container.tasks.list():
+            if task.status in {
+                TaskStatus.QUEUED,
+                TaskStatus.PREPARING,
+                TaskStatus.STARTING,
+                TaskStatus.RUNNING,
+            }:
+                container.tasks.save(
+                    task.transition(
+                        TaskStatus.FAILED,
+                        error_code="TASK_INTERRUPTED",
+                        error_message="平台重启导致任务中断",
+                    )
+                )
+        container.media_runs.recover_incomplete()
+        container.workflows.recover_incomplete()
         seed_demo_data(container)
         async def reconcile_autoscaling() -> None:
             while True:

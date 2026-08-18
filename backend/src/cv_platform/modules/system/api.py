@@ -22,12 +22,18 @@ def system_health(request: Request, container=Depends(get_container)) -> dict[st
     except Exception:
         instances = []
         manager = "unavailable"
+    database = (
+        "ok"
+        if container.database is not None and container.database.is_healthy()
+        else "unavailable" if container.database is not None else "not_configured"
+    )
+    healthy = manager == "ok" and database != "unavailable"
     return {
-        "status": "ok" if manager == "ok" else "degraded",
+        "status": "ok" if healthy else "degraded",
         "services": {
             "platform_api": "ok",
             "algorithm_manager": manager,
-            "database": "not_configured",
+            "database": database,
             "task_queue": "in_process",
             "file_storage": "local",
         },
