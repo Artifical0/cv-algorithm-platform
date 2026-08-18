@@ -6,6 +6,7 @@ services:
       context: .
       dockerfile: infra/docker/algorithm-manager.Dockerfile
     image: cv-platform/algorithm-manager:dev
+    restart: unless-stopped
     environment:
       ALGORITHM_MANAGER_DOCKER_NETWORK: cv-algorithm-platform_algorithm-runtime
       ALGORITHM_MANAGER_HOST_DATA_ROOT: ${CV_PLATFORM_DATA_ROOT:-/srv/cv-platform/data}
@@ -29,6 +30,7 @@ services:
       context: .
       dockerfile: infra/docker/backend.Dockerfile
     image: cv-platform/backend:dev
+    restart: unless-stopped
     environment:
       CV_PLATFORM_DEBUG: "false"
       CV_PLATFORM_CORS_ORIGINS: '["http://localhost:8080"]'
@@ -62,6 +64,7 @@ services:
       context: .
       dockerfile: infra/docker/media-worker.Dockerfile
     image: cv-platform/media-worker:dev
+    restart: unless-stopped
     volumes:
       - ${CV_PLATFORM_DATA_ROOT:-/srv/cv-platform/data}:/data
     healthcheck:
@@ -89,6 +92,7 @@ services:
       context: .
       dockerfile: infra/docker/frontend.Dockerfile
     image: cv-platform/frontend:dev
+    restart: unless-stopped
     ports:
       - "${CV_PLATFORM_HTTP_PORT:-8080}:80"
     depends_on:
