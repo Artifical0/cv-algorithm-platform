@@ -95,8 +95,7 @@ class HttpAlgorithmManagerGateway:
             )
         return response.json() if expect_json else None
 
-    @staticmethod
-    def _to_instance(payload: dict[str, object]) -> RuntimeInstance:
+    def _to_instance(self, payload: dict[str, object]) -> RuntimeInstance:
         return RuntimeInstance(
             id=str(payload["id"]),
             algorithm_version_id=str(payload["algorithm_version_id"]),

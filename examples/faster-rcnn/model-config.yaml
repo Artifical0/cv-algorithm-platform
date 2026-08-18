@@ -1,53 +1,8 @@
 device: auto
+labels: coco
 
 model:
-  type: FasterRCNN
-  pretrain: null
-  backbone:
-    type: ResNet
-    weights: null
-    backbone_name: resnet50
-    trainable_layers: 5
-    returned_layers: [1, 2, 3, 4]
-  num_classes: 92
+  torchvision_model: fasterrcnn_resnet50_fpn
+  num_classes: 91
   min_size: 600
   max_size: 800
-  image_mean: null
-  image_std: null
-  rpn_anchor_generator:
-    type: AnchorGenerator
-    sizes: [[32], [64], [128], [256], [512]]
-    aspect_ratios:
-      - [0.5, 1.0, 2.0]
-      - [0.5, 1.0, 2.0]
-      - [0.5, 1.0, 2.0]
-      - [0.5, 1.0, 2.0]
-      - [0.5, 1.0, 2.0]
-  rpn_head:
-    type: RPNHead
-    conv_depth: 3
-  rpn_pre_nms_top_n_train: 2000
-  rpn_pre_nms_top_n_test: 1000
-  rpn_post_nms_top_n_train: 2000
-  rpn_post_nms_top_n_test: 1000
-  rpn_nms_thresh: 0.7
-  rpn_fg_iou_thresh: 0.7
-  rpn_bg_iou_thresh: 0.3
-  rpn_batch_size_per_image: 256
-  rpn_positive_fraction: 0.5
-  rpn_score_thresh: 0
-  box_roi_pool:
-    type: MultiScaleRoIAlign
-    output_size: 7
-    sampling_ratio: 2
-  box_head:
-    type: TwoMLPHead
-    representation_size: 1024
-  box_score_thresh: 0.05
-  box_nms_thresh: 0.5
-  box_detections_per_img: 100
-  box_fg_iou_thresh: 0.5
-  box_bg_iou_thresh: 0.5
-  box_batch_size_per_image: 512
-  box_positive_fraction: 0.25
-  bbox_reg_weights: null

@@ -85,8 +85,20 @@ class TorchvisionPredictor:
         self._model.to(self._device)
         self._model.eval()
         self._torch = torch
-        category_map = config.get("_dataproc", {}).get("category_map", {})
-        self._labels = {int(category_id): name for name, category_id in category_map.items()}
+        if config.get("labels") == "coco":
+            from torchvision.models.detection import FasterRCNN_ResNet50_FPN_Weights
+
+            categories = FasterRCNN_ResNet50_FPN_Weights.COCO_V1.meta["categories"]
+            self._labels = {
+                index: name
+                for index, name in enumerate(categories)
+                if name != "N/A"
+            }
+        else:
+            category_map = config.get("_dataproc", {}).get("category_map", {})
+            self._labels = {
+                int(category_id): name for name, category_id in category_map.items()
+            }
 
     def predict(self, asset_uri: str, confidence: float) -> Prediction:
         if self._model is None or self._torch is None:
@@ -154,6 +166,20 @@ class TorchvisionPredictor:
 
     @staticmethod
     def _build_model(config: dict[str, Any]) -> Any:
+        torchvision_model = config.get("torchvision_model")
+        if torchvision_model:
+            if torchvision_model != "fasterrcnn_resnet50_fpn":
+                raise ValueError(f"unsupported torchvision model: {torchvision_model}")
+            from torchvision.models.detection import fasterrcnn_resnet50_fpn
+
+            return fasterrcnn_resnet50_fpn(
+                weights=None,
+                weights_backbone=None,
+                num_classes=int(config.get("num_classes", 91)),
+                min_size=int(config.get("min_size", 600)),
+                max_size=int(config.get("max_size", 800)),
+            )
+
         from torch import nn
         from torchvision.models import get_weight
         from torchvision.models.detection import FasterRCNN

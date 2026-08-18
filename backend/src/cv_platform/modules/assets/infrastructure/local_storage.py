@@ -84,6 +84,7 @@ class LocalAssetStorage:
                 temporary_path.unlink(missing_ok=True)
             else:
                 os.replace(temporary_path, final_path)
+            final_path.chmod(0o644)
             temporary_path = None
             algorithm_path = self._algorithm_data_root / PurePosixPath(storage_key)
             return StoredImage(
