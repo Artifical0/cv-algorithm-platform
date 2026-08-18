@@ -34,7 +34,8 @@ class YoloAlgorithm(DetectionAlgorithm):
         self._model = YOLO(str(self._settings.weights_path), task="detect")
 
     def predict(self, request: PredictRequest) -> ObjectDetectionResult:
-        confidence = float(self.manifest.resolve_parameters(request.parameters)["confidence"])
+        parameters = self.manifest.resolve_parameters(request.parameters)
+        confidence = float(parameters["confidence"])
         if self._settings.mode == "stub":
             return self._stub_result(request, confidence)
         if self._model is None:
@@ -45,6 +46,10 @@ class YoloAlgorithm(DetectionAlgorithm):
         predictions = self._model.predict(
             source=str(image_path),
             conf=confidence,
+            iou=float(parameters["iou_threshold"]),
+            max_det=int(parameters["max_detections"]),
+            imgsz=int(parameters["image_size"]),
+            agnostic_nms=bool(parameters["agnostic_nms"]),
             device=device,
             verbose=False,
         )

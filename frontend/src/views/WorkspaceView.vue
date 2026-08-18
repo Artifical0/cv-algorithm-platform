@@ -43,7 +43,7 @@ async function handleUpload(event: Event) {
 
 function numericBounds(spec: ParameterSpec) {
   return spec.type === 'number' || spec.type === 'integer'
-    ? { min: spec.minimum, max: spec.maximum, step: spec.type === 'integer' ? 1 : 0.01 }
+    ? { min: spec.minimum, max: spec.maximum, step: spec.step ?? (spec.type === 'integer' ? 1 : 0.01) }
     : {}
 }
 
@@ -117,18 +117,29 @@ async function submitTask() {
         :alt="selectedAsset.original_name"
       />
       <template v-for="(spec, name) in activeSelection?.parameters ?? {}" :key="name">
-        <label v-if="spec.type === 'number' || spec.type === 'integer'">
-          {{ name }} <output>{{ parameterValues[name] }}</output>
-          <input
-            v-model.number="parameterValues[name]"
-            type="range"
-            v-bind="numericBounds(spec)"
-          />
+        <label v-if="spec.type === 'number' || spec.type === 'integer'" class="parameter-control">
+          <span class="parameter-title">{{ spec.title ?? name }}</span>
+          <small v-if="spec.description">{{ spec.description }}</small>
+          <div class="parameter-inputs">
+            <input
+              v-model.number="parameterValues[name]"
+              type="range"
+              v-bind="numericBounds(spec)"
+            />
+            <input
+              v-model.number="parameterValues[name]"
+              class="parameter-number"
+              type="number"
+              v-bind="numericBounds(spec)"
+              :aria-label="spec.title ?? String(name)"
+            />
+          </div>
         </label>
         <label v-else-if="spec.type === 'boolean'" class="check-control">
-          <input v-model="parameterValues[name]" type="checkbox" /> {{ name }}
+          <input v-model="parameterValues[name]" type="checkbox" /> {{ spec.title ?? name }}
         </label>
-        <label v-else>{{ name }}
+        <label v-else>{{ spec.title ?? name }}
+          <small v-if="spec.description">{{ spec.description }}</small>
           <select v-if="spec.options" v-model="parameterValues[name]">
             <option v-for="option in spec.options" :key="option" :value="option">{{ option }}</option>
           </select>

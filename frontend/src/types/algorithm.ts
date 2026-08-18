@@ -7,22 +7,29 @@ export type AlgorithmStatus =
   | 'disabled'
   | 'failed'
 
-export type NumberParameter = {
+type ParameterMetadata = {
+  title?: string
+  description?: string
+}
+
+export type NumberParameter = ParameterMetadata & {
   type: 'number'
   default: number
   minimum?: number
   maximum?: number
+  step?: number
 }
 
-export type IntegerParameter = {
+export type IntegerParameter = ParameterMetadata & {
   type: 'integer'
   default: number
   minimum?: number
   maximum?: number
+  step?: number
 }
 
-export type BooleanParameter = { type: 'boolean'; default: boolean }
-export type StringParameter = { type: 'string'; default: string; options?: string[] }
+export type BooleanParameter = ParameterMetadata & { type: 'boolean'; default: boolean }
+export type StringParameter = ParameterMetadata & { type: 'string'; default: string; options?: string[] }
 export type ParameterSpec = NumberParameter | IntegerParameter | BooleanParameter | StringParameter
 
 export interface Algorithm {

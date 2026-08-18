@@ -14,6 +14,9 @@ def test_create_task_applies_default_algorithm_parameters(client: TestClient) ->
     assert response.status_code == 201
     assert response.json()["status"] == "queued"
     assert response.json()["parameters"]["confidence"] == 0.5
+    assert response.json()["parameters"]["nms_threshold"] == 0.5
+    assert response.json()["parameters"]["max_detections"] == 100
+    assert response.json()["parameters"]["min_box_area"] == 0
 
 
 def test_create_task_rejects_unknown_parameter(client: TestClient) -> None:

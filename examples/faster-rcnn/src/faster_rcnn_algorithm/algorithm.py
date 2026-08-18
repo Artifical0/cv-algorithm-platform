@@ -40,6 +40,9 @@ class FasterRcnnAlgorithm(DetectionAlgorithm):
         prediction = self._predictor.predict(
             request.input.asset_uri,
             float(parameters["confidence"]),
+            float(parameters["nms_threshold"]),
+            int(parameters["max_detections"]),
+            float(parameters["min_box_area"]),
         )
         return ObjectDetectionResult(
             request_id=request.request_id,

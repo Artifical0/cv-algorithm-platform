@@ -82,6 +82,11 @@ h1 em { color: var(--green); font-style: normal; }
 .task-form input:not([type='range']) { width: 100%; margin-top: 8px; padding: 12px 14px; color: var(--white); border: 1px solid var(--line); outline: none; background: #0d1411; font-family: 'DM Mono'; }
 .task-form input:focus { border-color: #6d9c70; }
 .task-form input[type='range'] { width: 100%; margin-top: 12px; accent-color: var(--green); }
+.parameter-control { padding: 14px; border: 1px solid var(--line); background: #101714; }
+.parameter-title { display: block; color: var(--white); font-size: 12px; font-weight: 700; }
+.parameter-control small, .task-form label > small { display: block; margin-top: 5px; color: #718078; line-height: 1.5; }
+.parameter-inputs { display: grid; grid-template-columns: 1fr 104px; align-items: center; gap: 14px; }
+.task-form .parameter-inputs .parameter-number { width: 104px; margin-top: 8px; padding: 9px 10px; }
 .selected-algorithm { margin: 20px 0; padding: 13px; border-left: 2px solid var(--green); background: #152018; }
 .selected-algorithm span, .selected-algorithm strong { display: block; }
 .selected-algorithm span { color: var(--muted); font-size: 9px; text-transform: uppercase; }

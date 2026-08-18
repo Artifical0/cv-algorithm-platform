@@ -6,3 +6,6 @@ model:
   num_classes: 91
   min_size: 600
   max_size: 800
+  box_score_thresh: 0.0
+  box_nms_thresh: 1.0
+  box_detections_per_img: 300

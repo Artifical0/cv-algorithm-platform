@@ -27,11 +27,16 @@ def test_manifest_accepts_valid_detection_algorithm() -> None:
                     "default": 0.5,
                     "minimum": 0,
                     "maximum": 1,
+                    "step": 0.01,
+                    "title": "置信度阈值",
+                    "description": "过滤低分检测框",
                 }
             },
         }
     )
     assert manifest.parameters["confidence"].default == 0.5
+    assert manifest.parameters["confidence"].step == 0.01
+    assert manifest.parameters["confidence"].title == "置信度阈值"
 
 
 def test_manifest_rejects_mismatched_result_type() -> None:

@@ -12,6 +12,13 @@ def test_list_seeded_algorithms(client: TestClient) -> None:
     assert payload[0]["id"] == str(
         uuid5(NAMESPACE_URL, "cv-platform:faster-rcnn-resnet50:1.0.0")
     )
+    assert list(payload[0]["parameters"]) == [
+        "confidence",
+        "nms_threshold",
+        "max_detections",
+        "min_box_area",
+    ]
+    assert payload[0]["parameters"]["nms_threshold"]["title"] == "NMS 重叠阈值"
 
 
 def test_get_unknown_algorithm_returns_business_error(client: TestClient) -> None:

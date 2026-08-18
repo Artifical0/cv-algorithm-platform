@@ -30,6 +30,9 @@ class NumberParameter(StrictModel):
     default: float
     minimum: float | None = None
     maximum: float | None = None
+    step: float | None = Field(default=None, gt=0)
+    title: str | None = Field(default=None, max_length=64)
+    description: str | None = Field(default=None, max_length=256)
 
     @model_validator(mode="after")
     def validate_range(self) -> "NumberParameter":
@@ -47,6 +50,9 @@ class IntegerParameter(StrictModel):
     default: int
     minimum: int | None = None
     maximum: int | None = None
+    step: int | None = Field(default=None, gt=0)
+    title: str | None = Field(default=None, max_length=64)
+    description: str | None = Field(default=None, max_length=256)
 
     @model_validator(mode="after")
     def validate_range(self) -> "IntegerParameter":
@@ -62,12 +68,16 @@ class IntegerParameter(StrictModel):
 class BooleanParameter(StrictModel):
     type: Literal["boolean"]
     default: bool
+    title: str | None = Field(default=None, max_length=64)
+    description: str | None = Field(default=None, max_length=256)
 
 
 class StringParameter(StrictModel):
     type: Literal["string"]
     default: str
     options: list[str] | None = None
+    title: str | None = Field(default=None, max_length=64)
+    description: str | None = Field(default=None, max_length=256)
 
 
 ParameterSpec = Annotated[

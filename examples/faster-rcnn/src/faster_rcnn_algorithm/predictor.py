@@ -30,7 +30,14 @@ class Prediction:
 class Predictor(Protocol):
     def load(self) -> None: ...
 
-    def predict(self, asset_uri: str, confidence: float) -> Prediction: ...
+    def predict(
+        self,
+        asset_uri: str,
+        confidence: float,
+        nms_threshold: float,
+        max_detections: int,
+        min_box_area: float,
+    ) -> Prediction: ...
 
 
 class StubPredictor:
@@ -39,9 +46,16 @@ class StubPredictor:
     def load(self) -> None:
         return None
 
-    def predict(self, _: str, confidence: float) -> Prediction:
+    def predict(
+        self,
+        _: str,
+        confidence: float,
+        nms_threshold: float,
+        max_detections: int,
+        min_box_area: float,
+    ) -> Prediction:
         detections = []
-        if confidence <= 0.92:
+        if confidence <= 0.92 and min_box_area <= 192_000 and max_detections > 0:
             detections.append(RawDetection("person", 0.92, [110, 80, 430, 680]))
         return Prediction(1280, 720, 0, 1, 0, detections)
 
@@ -100,7 +114,14 @@ class TorchvisionPredictor:
                 int(category_id): name for name, category_id in category_map.items()
             }
 
-    def predict(self, asset_uri: str, confidence: float) -> Prediction:
+    def predict(
+        self,
+        asset_uri: str,
+        confidence: float,
+        nms_threshold: float,
+        max_detections: int,
+        min_box_area: float,
+    ) -> Prediction:
         if self._model is None or self._torch is None:
             raise RuntimeError("predictor is not loaded")
         image_path = self._resolve_asset(asset_uri)
@@ -117,18 +138,26 @@ class TorchvisionPredictor:
 
         predictions = output[1] if isinstance(output, tuple) else output
         prediction = predictions[0]
-        boxes = prediction["boxes"].detach().cpu()
-        scores = prediction["scores"].detach().cpu()
-        labels = prediction["labels"].detach().cpu()
-        detections = [
-            RawDetection(
-                label=self._labels.get(int(label), f"class_{int(label)}"),
-                score=round(float(score), 6),
-                bbox=[round(float(value), 2) for value in box],
+        from torchvision.ops import nms
+
+        keep = nms(prediction["boxes"], prediction["scores"], nms_threshold)
+        boxes = prediction["boxes"][keep].detach().cpu()
+        scores = prediction["scores"][keep].detach().cpu()
+        labels = prediction["labels"][keep].detach().cpu()
+        detections = []
+        for box, score, label in zip(boxes, scores, labels, strict=True):
+            area = max(float(box[2] - box[0]), 0) * max(float(box[3] - box[1]), 0)
+            if float(score) < confidence or area < min_box_area:
+                continue
+            detections.append(
+                RawDetection(
+                    label=self._labels.get(int(label), f"class_{int(label)}"),
+                    score=round(float(score), 6),
+                    bbox=[round(float(value), 2) for value in box],
+                )
             )
-            for box, score, label in zip(boxes, scores, labels, strict=True)
-            if float(score) >= confidence
-        ]
+            if len(detections) >= max_detections:
+                break
         completed = perf_counter()
         return Prediction(
             width=image.width,
@@ -178,6 +207,9 @@ class TorchvisionPredictor:
                 num_classes=int(config.get("num_classes", 91)),
                 min_size=int(config.get("min_size", 600)),
                 max_size=int(config.get("max_size", 800)),
+                box_score_thresh=float(config.get("box_score_thresh", 0.0)),
+                box_nms_thresh=float(config.get("box_nms_thresh", 1.0)),
+                box_detections_per_img=int(config.get("box_detections_per_img", 300)),
             )
 
         from torch import nn
