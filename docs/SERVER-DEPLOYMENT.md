@@ -44,6 +44,7 @@ CPU-only 节点可跳过最后两项，但 GPU manifest 的算法不能在该节
 CV_PLATFORM_ADMIN_USERNAME=admin
 CV_PLATFORM_ADMIN_PASSWORD=<至少 12 位强密码>
 CV_PLATFORM_AUTH_ENABLED=false
+CV_PLATFORM_HTTP_PORT=8080
 CV_PLATFORM_DATA_ROOT=/srv/cv-platform/data
 CV_PLATFORM_MODEL_ROOT=/srv/cv-platform/models
 CV_PLATFORM_PACKAGE_ROOT=/srv/cv-platform/packages
@@ -82,7 +83,7 @@ docker compose -f compose.yaml -f compose.database.yaml --profile database ps
 docker compose -f compose.yaml -f compose.database.yaml --profile database logs --tail 200 backend postgres algorithm-manager media-worker
 ```
 
-访问 `http://<服务器IP>:8080`。免登录模式会直接进入工作台；启用认证后使用 `.env` 中的管理员账号登录。
+访问 `http://<服务器IP>:<CV_PLATFORM_HTTP_PORT>`。默认端口为 `8080`；端口已被其他服务占用时可改为 `8081`。免登录模式会直接进入工作台；启用认证后使用 `.env` 中的管理员账号登录。
 
 ## 6. 摄像头、视频与 RTSP
 
