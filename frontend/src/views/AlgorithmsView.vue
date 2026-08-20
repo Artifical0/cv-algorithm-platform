@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 import { algorithmsApi } from '@/api/algorithms'
 import type { AlgorithmTemplateType } from '@/api/algorithms'
@@ -11,6 +11,7 @@ import { sessionRole } from '@/api/auth'
 
 const { algorithms, loading, error, refresh } = useAlgorithms()
 const actionError = ref('')
+const buildNotice = ref('')
 const importing = ref(false)
 const selected = ref<Algorithm | null>(null)
 const buildJob = ref<BuildJob | null>(null)
@@ -29,6 +30,13 @@ const filteredAlgorithms = computed(() => algorithms.value.filter((algorithm) =>
 ))
 const canBuild = computed(() => ['admin', 'developer'].includes(sessionRole.get() ?? 'user'))
 const isAdmin = computed(() => sessionRole.get() === 'admin')
+let buildPollTimer: number | undefined
+
+async function refreshSelected() {
+  await refresh()
+  if (!selected.value) return
+  selected.value = algorithms.value.find((algorithm) => algorithm.id === selected.value?.id) ?? selected.value
+}
 
 async function importPackage(event: Event) {
   const input = event.target as HTMLInputElement
@@ -36,11 +44,16 @@ async function importPackage(event: Event) {
   if (!file) return
   importing.value = true
   actionError.value = ''
+  buildNotice.value = ''
+  buildJob.value = null
   try {
-    selected.value = await algorithmsApi.importPackage(file)
-    await refresh()
+    const imported = await algorithmsApi.importPackage(file)
+    selected.value = imported
+    buildNotice.value = `${imported.name} 已上传，正在提交自动构建…`
+    await startBuild(imported)
   } catch (reason) {
-    actionError.value = reason instanceof Error ? reason.message : '导入算法包失败'
+    actionError.value = reason instanceof Error ? reason.message : '上传或提交自动构建失败'
+    buildNotice.value = ''
   } finally {
     importing.value = false
     input.value = ''
@@ -49,19 +62,51 @@ async function importPackage(event: Event) {
 
 async function buildAlgorithm() {
   if (!selected.value) return
-  buildJob.value = await algorithmsApi.build(selected.value.id)
-  pollBuild()
+  actionError.value = ''
+  buildNotice.value = ''
+  try {
+    await startBuild(selected.value)
+  } catch (reason) {
+    actionError.value = reason instanceof Error ? reason.message : '提交构建失败'
+  }
 }
 
-function pollBuild() {
-  if (!buildJob.value) return
-  window.setTimeout(async () => {
-    if (!buildJob.value) return
-    buildJob.value = await algorithmsApi.buildJob(buildJob.value.id)
-    await refresh()
-    if (!['completed', 'failed'].includes(buildJob.value.status)) pollBuild()
+async function startBuild(algorithm: Algorithm) {
+  if (buildPollTimer) window.clearTimeout(buildPollTimer)
+  buildJob.value = await algorithmsApi.build(algorithm.id)
+  buildNotice.value = `${algorithm.name} 正在后台构建并验收，请勿重复上传。`
+  await refreshSelected()
+  pollBuild(buildJob.value.id)
+}
+
+function pollBuild(jobId: string) {
+  buildPollTimer = window.setTimeout(async () => {
+    try {
+      const job = await algorithmsApi.buildJob(jobId)
+      if (buildJob.value?.id !== jobId) return
+      buildJob.value = job
+      actionError.value = ''
+      await refreshSelected()
+      if (job.status === 'completed') {
+        buildNotice.value = `${selected.value?.name ?? '算法'} 构建和协议验收通过，已自动发布为可用版本。`
+        return
+      }
+      if (job.status === 'failed') {
+        buildNotice.value = ''
+        actionError.value = job.error_message ?? '算法构建失败，请查看下方构建日志后重新构建。'
+        return
+      }
+      pollBuild(jobId)
+    } catch (reason) {
+      actionError.value = reason instanceof Error ? `${reason.message}；后台构建不受影响，正在重试获取进度。` : '获取构建进度失败，正在重试。'
+      pollBuild(jobId)
+    }
   }, 1500)
 }
+
+onBeforeUnmount(() => {
+  if (buildPollTimer) window.clearTimeout(buildPollTimer)
+})
 
 async function toggleEnabled() {
   if (!selected.value) return
@@ -85,9 +130,10 @@ async function deleteVersion() {
   <header class="page-heading">
     <span class="eyebrow">ALGORITHM REGISTRY</span>
     <h1>算法中心</h1>
-    <p>算法版本、协议、受控包导入、构建日志和运行环境的统一入口。</p>
+    <p>上传算法包后，平台会自动构建、验收并发布，全程无需进入服务器。</p>
   </header>
   <p v-if="error || actionError" class="alert">{{ error || actionError }}</p>
+  <p v-if="buildNotice" class="build-notice">{{ buildNotice }}</p>
   <div class="toolbar">
     <span>{{ algorithms.length }} 个算法版本</span>
     <div class="toolbar-actions">
@@ -107,7 +153,7 @@ async function deleteVersion() {
         @click="showImportGuide = !showImportGuide"
       >{{ showImportGuide ? '收起规范' : '查看规范' }}</button>
       <label v-if="canBuild" class="primary-button upload-button">
-        {{ importing ? '校验中…' : '导入 ZIP' }}
+        {{ importing ? '上传并提交构建…' : '上传并自动构建' }}
         <input type="file" accept="application/zip,.zip" :disabled="importing" @change="importPackage" />
       </label>
     </div>
@@ -134,7 +180,7 @@ weights/</pre>
           <li>修改 manifest 的算法 ID、版本、运行环境和动态参数。</li>
           <li>在 algorithm.py 中加载模型并返回对应的 SDK Result。</li>
           <li>用真实图片替换 test/sample.jpg，将根目录内容压缩为 ZIP。</li>
-          <li>导入后执行“构建并发布”，平台自动验收三个标准接口。</li>
+          <li>上传 ZIP，平台自动构建镜像、验收三个标准接口并发布。</li>
         </ol>
         <p class="guide-warning">不要放入 Dockerfile、绝对路径、符号链接或设备文件。</p>
       </article>
@@ -177,7 +223,7 @@ weights/</pre>
         v-if="canBuild && ['uploaded', 'failed'].includes(selected.status)"
         class="primary-button compact-button"
         @click="buildAlgorithm"
-      >构建并发布</button>
+      >{{ selected.status === 'failed' ? '重新构建' : '构建并发布' }}</button>
       <button
         v-if="isAdmin && ['available', 'disabled'].includes(selected.status)"
         class="secondary-button"

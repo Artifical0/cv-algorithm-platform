@@ -240,6 +240,7 @@ h1 em { color: var(--white); font-style: normal; }
 .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
 .empty-state { padding: 28px; border: 1px dashed var(--line-strong); border-radius: var(--radius); color: var(--muted); background: #fafbfc; text-align: center; font-size: 13px; }
 .alert { padding: 10px 13px; border: 1px solid #fecdca; border-radius: 6px; color: #b42318; background: #fef3f2; font-size: 13px; }
+.build-notice { margin: 12px 0; padding: 10px 13px; border: 1px solid #b2ccff; border-radius: 6px; color: #1849a9; background: #eff4ff; font-size: 13px; }
 .page-heading { padding: 0 0 17px; border-bottom: 1px solid var(--line); }
 .page-heading .eyebrow { display: none; }
 .page-heading h1 { margin: 4px 0 5px; font-size: 27px; }
