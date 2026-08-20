@@ -7,7 +7,7 @@ def test_list_seeded_algorithms(client: TestClient) -> None:
     response = client.get("/api/v1/algorithms")
     assert response.status_code == 200
     payload = response.json()
-    assert [item["key"] for item in payload] == ["faster-rcnn-resnet50", "yolo-detector"]
+    assert [item["key"] for item in payload] == ["faster-rcnn-resnet50"]
     assert all(item["status"] == "available" for item in payload)
     assert payload[0]["id"] == str(
         uuid5(NAMESPACE_URL, "cv-platform:faster-rcnn-resnet50:1.0.0")
