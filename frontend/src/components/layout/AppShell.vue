@@ -42,17 +42,17 @@ async function logout() {
 
       <div class="sidebar-footer">
         <span class="status-dot" />
-        <div><strong>平台服务</strong><small>协议开发阶段</small></div>
+        <div><strong>平台在线</strong><small>PostgreSQL 持久化</small></div>
       </div>
     </aside>
 
     <main class="main-content">
       <header class="topbar">
         <div>
-          <p>LOCAL GPU WORKSPACE</p>
+          <p>工作空间</p>
           <strong>多算法计算机视觉平台</strong>
         </div>
-        <span class="phase-badge">MVP · FEATURE COMPLETE</span>
+        <span class="phase-badge">服务运行中</span>
         <button v-if="authenticationEnabled" class="secondary-button" @click="logout">退出</button>
       </header>
       <div class="page-content"><slot /></div>

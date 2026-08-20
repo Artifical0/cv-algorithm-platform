@@ -28,6 +28,12 @@ async function downloadArchive() {
   link.click()
   URL.revokeObjectURL(link.href)
 }
+
+function toggleResult(taskId: string) {
+  selectedResults.value = selectedResults.value.includes(taskId)
+    ? selectedResults.value.filter((item) => item !== taskId)
+    : [...selectedResults.value, taskId]
+}
 </script>
 
 <template>
@@ -42,23 +48,15 @@ async function downloadArchive() {
   </div>
   <div v-if="loading" class="empty-state">正在加载…</div>
   <template v-else>
-    <TaskTable :tasks="filteredTasks" :algorithms="algorithms" />
-    <div v-if="filteredTasks.length" class="task-actions-list">
-      <div v-for="task in filteredTasks" :key="task.id">
-        <input v-if="task.status === 'completed'" v-model="selectedResults" type="checkbox" :value="task.id" title="加入结果归档" />
-        <span class="mono">{{ task.id.slice(0, 8) }}</span>
-        <button
-          v-if="!['completed', 'failed', 'cancelled'].includes(task.status)"
-          class="secondary-button danger-button"
-          @click="cancel(task.id)"
-        >取消</button>
-        <button
-          v-if="['failed', 'cancelled'].includes(task.status)"
-          class="secondary-button"
-          @click="retry(task.id)"
-        >重试</button>
-      </div>
-    </div>
+    <TaskTable
+      :tasks="filteredTasks"
+      :algorithms="algorithms"
+      :selected-results="selectedResults"
+      manageable
+      @toggle-result="toggleResult"
+      @cancel="cancel"
+      @retry="retry"
+    />
     <button v-if="selectedResults.length" class="primary-button compact-button archive-button" @click="downloadArchive">下载 {{ selectedResults.length }} 个结果 ZIP</button>
   </template>
 </template>

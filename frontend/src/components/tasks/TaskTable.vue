@@ -2,7 +2,20 @@
 import type { Algorithm } from '@/types/algorithm'
 import type { InferenceTask } from '@/types/task'
 
-const props = defineProps<{ tasks: InferenceTask[]; algorithms: Algorithm[] }>()
+const props = withDefaults(defineProps<{
+  tasks: InferenceTask[]
+  algorithms: Algorithm[]
+  manageable?: boolean
+  selectedResults?: string[]
+}>(), {
+  manageable: false,
+  selectedResults: () => [],
+})
+defineEmits<{
+  'toggle-result': [taskId: string]
+  cancel: [taskId: string]
+  retry: [taskId: string]
+}>()
 
 function algorithmName(id: string) {
   return props.algorithms.find((item) => item.id === id)?.name ?? '未知算法'
@@ -16,14 +29,35 @@ function formatTime(value: string) {
 </script>
 
 <template>
-  <div v-if="tasks.length" class="task-table">
-    <div class="task-row task-head"><span>任务</span><span>算法</span><span>状态</span><span>创建时间</span></div>
-    <RouterLink v-for="task in tasks" :key="task.id" :to="`/tasks/${task.id}`" class="task-row">
-      <span class="mono">{{ task.id.slice(0, 8) }}</span>
-      <span>{{ algorithmName(task.algorithm_version_id) }}</span>
-      <span :class="`task-status task-${task.status}`"><i class="status-dot" /> {{ task.status }}</span>
-      <span>{{ formatTime(task.created_at) }}</span>
-    </RouterLink>
+  <div v-if="tasks.length" class="task-table" :class="{ manageable }">
+    <div class="task-row task-head">
+      <span>任务</span><span>算法</span><span>状态</span><span>创建时间</span><span v-if="manageable">操作</span>
+    </div>
+    <div v-for="task in tasks" :key="task.id" class="task-row">
+      <RouterLink :to="`/tasks/${task.id}`" class="mono">{{ task.id.slice(0, 8) }}</RouterLink>
+      <RouterLink :to="`/tasks/${task.id}`">{{ algorithmName(task.algorithm_version_id) }}</RouterLink>
+      <RouterLink :to="`/tasks/${task.id}`" :class="`task-status task-${task.status}`"><i class="status-dot" /> {{ task.status }}</RouterLink>
+      <RouterLink :to="`/tasks/${task.id}`">{{ formatTime(task.created_at) }}</RouterLink>
+      <span v-if="manageable" class="task-row-actions">
+        <label v-if="task.status === 'completed'" title="加入结果归档">
+          <input
+            type="checkbox"
+            :checked="selectedResults.includes(task.id)"
+            @change="$emit('toggle-result', task.id)"
+          /> 归档
+        </label>
+        <button
+          v-if="!['completed', 'failed', 'cancelled'].includes(task.status)"
+          class="secondary-button danger-button"
+          @click="$emit('cancel', task.id)"
+        >取消</button>
+        <button
+          v-if="['failed', 'cancelled'].includes(task.status)"
+          class="secondary-button"
+          @click="$emit('retry', task.id)"
+        >重试</button>
+      </span>
+    </div>
   </div>
   <div v-else class="empty-state">尚无任务。选择算法并创建第一个推理任务。</div>
 </template>
