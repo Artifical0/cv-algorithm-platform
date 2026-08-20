@@ -1,6 +1,13 @@
 import { request } from './http'
 import type { Algorithm, BuildJob } from '@/types/algorithm'
 
+export type AlgorithmTemplateType =
+  | 'object_detection'
+  | 'classification'
+  | 'segmentation'
+  | 'ocr'
+  | 'pose_estimation'
+
 export const algorithmsApi = {
   list: () => request<Algorithm[]>('/algorithms'),
   get: (id: string) => request<Algorithm>(`/algorithms/${id}`),

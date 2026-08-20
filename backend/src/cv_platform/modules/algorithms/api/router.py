@@ -1,13 +1,14 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
-
 from cv_algorithm_sdk import AlgorithmStatus, ResultType
+from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
+from fastapi.responses import StreamingResponse
 
 from ....core.container import ApplicationContainer
-from ....dependencies import get_container
 from ....core.request_context import project_id_from
+from ....dependencies import get_container
 from ..application.service import AlgorithmService
+from ..template_package import build_algorithm_template, template_filename
 from .schemas import AlgorithmResponse, BuildJobResponse
 
 router = APIRouter(tags=["algorithms"])
@@ -101,6 +102,19 @@ def import_algorithm(
 ) -> AlgorithmResponse:
     algorithm = service.import_package(package.file, package.filename or "")
     return AlgorithmResponse.from_entity(algorithm)
+
+
+@router.get("/algorithms/template", response_class=StreamingResponse)
+def download_algorithm_template(
+    task_type: ResultType = ResultType.OBJECT_DETECTION,
+) -> StreamingResponse:
+    return StreamingResponse(
+        build_algorithm_template(task_type),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{template_filename(task_type)}"',
+        },
+    )
 
 
 @router.get("/algorithms/{algorithm_id}", response_model=AlgorithmResponse)

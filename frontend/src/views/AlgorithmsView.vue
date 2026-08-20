@@ -2,6 +2,8 @@
 import { computed, ref } from 'vue'
 
 import { algorithmsApi } from '@/api/algorithms'
+import type { AlgorithmTemplateType } from '@/api/algorithms'
+import { apiUrl } from '@/api/http'
 import AlgorithmCard from '@/components/algorithms/AlgorithmCard.vue'
 import { useAlgorithms } from '@/composables/useAlgorithms'
 import type { Algorithm, BuildJob } from '@/types/algorithm'
@@ -15,6 +17,11 @@ const buildJob = ref<BuildJob | null>(null)
 const query = ref('')
 const taskType = ref('')
 const algorithmStatus = ref('')
+const templateType = ref<AlgorithmTemplateType>('object_detection')
+const showImportGuide = ref(false)
+const templateDownloadUrl = computed(() =>
+  apiUrl(`/algorithms/template?task_type=${encodeURIComponent(templateType.value)}`),
+)
 const filteredAlgorithms = computed(() => algorithms.value.filter((algorithm) =>
   (!query.value || algorithm.name.toLowerCase().includes(query.value.toLowerCase()) || algorithm.key.includes(query.value.toLowerCase()))
   && (!taskType.value || algorithm.task_type === taskType.value)
@@ -85,12 +92,61 @@ async function deleteVersion() {
     <span>{{ algorithms.length }} 个算法版本</span>
     <div class="toolbar-actions">
       <button class="secondary-button" @click="refresh">刷新</button>
+      <select v-if="canBuild" v-model="templateType" class="template-select" aria-label="算法模板类型">
+        <option value="object_detection">目标检测模板</option>
+        <option value="classification">图像分类模板</option>
+        <option value="segmentation">图像分割模板</option>
+        <option value="ocr">OCR 模板</option>
+        <option value="pose_estimation">姿态估计模板</option>
+      </select>
+      <a v-if="canBuild" class="secondary-button template-download" :href="templateDownloadUrl" download>下载模板</a>
+      <button
+        v-if="canBuild"
+        class="secondary-button"
+        :aria-expanded="showImportGuide"
+        @click="showImportGuide = !showImportGuide"
+      >{{ showImportGuide ? '收起规范' : '查看规范' }}</button>
       <label v-if="canBuild" class="primary-button upload-button">
         {{ importing ? '校验中…' : '导入 ZIP' }}
         <input type="file" accept="application/zip,.zip" :disabled="importing" @change="importPackage" />
       </label>
     </div>
   </div>
+  <section v-if="canBuild && showImportGuide" class="import-guide">
+    <header>
+      <div><span>IMPORT GUIDE</span><h2>算法包接入规范</h2></div>
+      <p>下载最接近任务类型的模板，替换推理逻辑和示例图片后再导入。</p>
+    </header>
+    <div class="import-guide-grid">
+      <article>
+        <strong>ZIP 根目录结构</strong>
+        <pre>manifest.yaml
+service.py
+algorithm.py
+requirements.txt
+README.md
+test/sample.jpg
+weights/</pre>
+      </article>
+      <article>
+        <strong>导入流程</strong>
+        <ol>
+          <li>修改 manifest 的算法 ID、版本、运行环境和动态参数。</li>
+          <li>在 algorithm.py 中加载模型并返回对应的 SDK Result。</li>
+          <li>用真实图片替换 test/sample.jpg，将根目录内容压缩为 ZIP。</li>
+          <li>导入后执行“构建并发布”，平台自动验收三个标准接口。</li>
+        </ol>
+        <p class="guide-warning">不要放入 Dockerfile、绝对路径、符号链接或设备文件。</p>
+      </article>
+      <article>
+        <strong>平台协议</strong>
+        <code>GET /health</code>
+        <code>GET /metadata</code>
+        <code>POST /predict</code>
+        <p>service.py 已通过平台 SDK 实现协议，通常只需修改 algorithm.py。</p>
+      </article>
+    </div>
+  </section>
   <div class="algorithm-filters">
     <input v-model="query" placeholder="搜索名称或算法 ID" />
     <select v-model="taskType"><option value="">全部任务类型</option><option value="object_detection">目标检测</option><option value="classification">分类</option><option value="segmentation">分割</option><option value="ocr">OCR</option><option value="pose_estimation">姿态</option></select>
